@@ -2837,6 +2837,9 @@ function SupplierReports({ token, user }) {
 // =============================================================================
 // SETTINGS COMPONENT (Admin Only)
 // =============================================================================
+// =============================================================================
+// SETTINGS COMPONENT (Admin Only) - FIXED
+// =============================================================================
 function Settings({ token, user }) {
   const [view, setView] = useState('menu');
   const [users, setUsers] = useState([]);
@@ -2849,6 +2852,19 @@ function Settings({ token, user }) {
   const [newBranch, setNewBranch] = useState({ name: '', location: '' });
   const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
   const [message, setMessage] = useState('');
+
+  // Load data when view changes
+  useEffect(() => {
+    setMessage('');
+    if (view === 'users') {
+      loadUsers();
+      loadBranches();
+    } else if (view === 'branches') {
+      loadBranches();
+    } else if (view === 'suppliers') {
+      loadSuppliers();
+    }
+  }, [view]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -2941,11 +2957,11 @@ function Settings({ token, user }) {
         throw new Error(data.error || 'Failed to delete user');
       }
 
-      alert(`✓ User deleted successfully`);
+      setMessage(`✓ User "${userName}" deleted successfully`);
       loadUsers();
 
     } catch (err) {
-      alert(`✗ Error: ${err.message}`);
+      setMessage(`✗ Error: ${err.message}`);
     }
   };
 
@@ -3009,9 +3025,6 @@ function Settings({ token, user }) {
 
   // Users Management View
   if (view === 'users') {
-    if (users.length === 0 && !loading) loadUsers();
-    if (branches.length === 0) loadBranches();
-
     return (
       <div className="settings">
         <div className="page-header">
@@ -3120,26 +3133,32 @@ function Settings({ token, user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td>{u.name}</td>
-                      <td>{u.email}</td>
-                      <td>
-                        <span className={`role-badge ${u.role}`}>{u.role}</span>
-                      </td>
-                      <td>{u.branch_name || '-'}</td>
-                      <td>
-                        {u.id !== user.id && (
-                          <button 
-                            className="btn small danger"
-                            onClick={() => handleDeleteUser(u.id, u.name)}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="empty-state">No users found.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    users.map(u => (
+                      <tr key={u.id}>
+                        <td>{u.name}</td>
+                        <td>{u.email}</td>
+                        <td>
+                          <span className={`role-badge ${u.role}`}>{u.role}</span>
+                        </td>
+                        <td>{u.branch_name || '-'}</td>
+                        <td>
+                          {u.id !== user.id && (
+                            <button 
+                              className="btn small danger"
+                              onClick={() => handleDeleteUser(u.id, u.name)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3151,8 +3170,6 @@ function Settings({ token, user }) {
 
   // Branches Management View
   if (view === 'branches') {
-    if (branches.length === 0 && !loading) loadBranches();
-
     return (
       <div className="settings">
         <div className="page-header">
@@ -3218,13 +3235,19 @@ function Settings({ token, user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {branches.map(b => (
-                    <tr key={b.id}>
-                      <td>{b.name}</td>
-                      <td>{b.location}</td>
-                      <td>{new Date(b.created_at).toLocaleDateString()}</td>
+                  {branches.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="empty-state">No branches found.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    branches.map(b => (
+                      <tr key={b.id}>
+                        <td>{b.name}</td>
+                        <td>{b.location}</td>
+                        <td>{new Date(b.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3236,8 +3259,6 @@ function Settings({ token, user }) {
 
   // Suppliers Management View
   if (view === 'suppliers') {
-    if (suppliers.length === 0 && !loading) loadSuppliers();
-
     return (
       <div className="settings">
         <div className="page-header">
@@ -3303,13 +3324,19 @@ function Settings({ token, user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {suppliers.map(s => (
-                    <tr key={s.id}>
-                      <td>{s.name}</td>
-                      <td>{s.contact_info}</td>
-                      <td>{new Date(s.created_at).toLocaleDateString()}</td>
+                  {suppliers.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="empty-state">No suppliers found.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    suppliers.map(s => (
+                      <tr key={s.id}>
+                        <td>{s.name}</td>
+                        <td>{s.contact_info}</td>
+                        <td>{new Date(s.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3319,7 +3346,7 @@ function Settings({ token, user }) {
     );
   }
 
-  // Settings Menu View
+  // Settings Menu View (Default)
   return (
     <div className="settings">
       <h2>Settings</h2>
