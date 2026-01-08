@@ -294,9 +294,11 @@ function Dashboard({ token, user, setActiveTab }) {
       <div className="quick-actions">
         <h3>Quick Actions</h3>
         <div className="actions-grid">
-          <button className="action-btn" onClick={() => setActiveTab('inventory')}>
-            <span>📦</span> Add Stock
-          </button>
+          {user?.role === 'admin' && (
+            <button className="action-btn" onClick={() => setActiveTab('inventory')}>
+              <span>📦</span> Add Stock
+            </button>
+          )}
           <button className="action-btn" onClick={() => setActiveTab('sales')}>
             <span>🛒</span> New Sale
           </button>
@@ -311,8 +313,9 @@ function Dashboard({ token, user, setActiveTab }) {
     </div>
   );
 }
+
 // =============================================================================
-// INVENTORY COMPONENT
+// INVENTORY COMPONENT - UPDATED: ADD/DELETE ADMIN ONLY
 // =============================================================================
 function Inventory({ token, user }) {
   const [view, setView] = useState('list');
@@ -504,8 +507,8 @@ function Inventory({ token, user }) {
     }
   };
 
-  // Add Stock Form View
-  if (showAddForm) {
+  // Add Stock Form View - ADMIN ONLY
+  if (showAddForm && user?.role === 'admin') {
     return (
       <div className="inventory">
         <div className="page-header">
@@ -610,8 +613,8 @@ function Inventory({ token, user }) {
     );
   }
 
-  // Transfer Stock Form View
-  if (showTransferForm) {
+  // Transfer Stock Form View - ADMIN ONLY
+  if (showTransferForm && user?.role === 'admin') {
     return (
       <div className="inventory">
         <div className="page-header">
@@ -686,13 +689,13 @@ function Inventory({ token, user }) {
                   <th>Branch</th>
                   <th>Cost Price</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  {user?.role === 'admin' && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {groupItems.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="empty-state">No items found</td>
+                    <td colSpan={user?.role === 'admin' ? 6 : 5} className="empty-state">No items found</td>
                   </tr>
                 ) : (
                   groupItems.map(item => (
@@ -706,14 +709,16 @@ function Inventory({ token, user }) {
                           {item.status}
                         </span>
                       </td>
-                      <td>
-                        <button 
-                          className="btn small danger"
-                          onClick={() => handleReturnToSupplier(item.serial_number)}
-                        >
-                          Return to Supplier
-                        </button>
-                      </td>
+                      {user?.role === 'admin' && (
+                        <td>
+                          <button 
+                            className="btn small danger"
+                            onClick={() => handleReturnToSupplier(item.serial_number)}
+                          >
+                            Return to Supplier
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -731,13 +736,15 @@ function Inventory({ token, user }) {
       <div className="page-header">
         <h2>Inventory</h2>
         <div className="header-actions">
-          <button className="btn primary" onClick={() => setShowAddForm(true)}>
-            + Add Stock
-          </button>
           {user?.role === 'admin' && (
-            <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
-              ↔ Transfer Stock
-            </button>
+            <>
+              <button className="btn primary" onClick={() => setShowAddForm(true)}>
+                + Add Stock
+              </button>
+              <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
+                ↔ Transfer Stock
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -759,7 +766,7 @@ function Inventory({ token, user }) {
               {stockGroups.length === 0 ? (
                 <tr>
                   <td colSpan={user?.role === 'admin' ? 4 : 3} className="empty-state">
-                    No stock available. Click "Add Stock" to add inventory.
+                    No stock available. {user?.role === 'admin' ? 'Click "Add Stock" to add inventory.' : 'Contact admin to add stock.'}
                   </td>
                 </tr>
               ) : (
@@ -791,14 +798,14 @@ function Inventory({ token, user }) {
   );
 }
 // =============================================================================
-// SALES COMPONENT
+// SALES COMPONENT - UPDATED WITH SALES_NOTE
 // =============================================================================
 function Sales({ token, user }) {
   const [view, setView] = useState('menu');
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // New Sale State
+  // New Sale State - UPDATED WITH SALES_NOTE
   const [saleData, setSaleData] = useState({
     branch_name: '',
     payment_type: 'cash',
@@ -806,6 +813,7 @@ function Sales({ token, user }) {
     customer_phone: '',
     vat_enabled: false,
     vat_percentage: 7.5,
+    sales_note: '',
     items: [{ serial_number: '', price: '', ram_price: '', storage_price: '' }]
   });
   const [saleError, setSaleError] = useState('');
@@ -886,6 +894,7 @@ function Sales({ token, user }) {
         customer_phone: saleData.customer_phone,
         vat_enabled: saleData.vat_enabled,
         vat_percentage: saleData.vat_enabled ? saleData.vat_percentage : 0,
+        sales_note: saleData.sales_note || null,
         items: saleData.items.map(item => ({
           serial_number: item.serial_number,
           price: parseFloat(item.price) || 0,
@@ -966,6 +975,7 @@ function Sales({ token, user }) {
       customer_phone: '',
       vat_enabled: false,
       vat_percentage: 7.5,
+      sales_note: '',
       items: [{ serial_number: '', price: '', ram_price: '', storage_price: '' }]
     });
     setSaleSuccess(null);
@@ -1021,7 +1031,7 @@ function Sales({ token, user }) {
     );
   }
 
-  // New Sale Form View
+  // New Sale Form View - UPDATED WITH SALES_NOTE
   if (view === 'new-sale') {
     const totals = calculateTotal();
 
@@ -1117,6 +1127,17 @@ function Sales({ token, user }) {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* NEW: Sales Note Field */}
+              <div className="form-group">
+                <label>Sales Note (Optional)</label>
+                <textarea
+                  value={saleData.sales_note}
+                  onChange={(e) => setSaleData({...saleData, sales_note: e.target.value})}
+                  placeholder="Any additional notes for this sale..."
+                  rows="2"
+                />
               </div>
             </div>
 
@@ -1319,8 +1340,9 @@ function Sales({ token, user }) {
     </div>
   );
 }
+
 // =============================================================================
-// CREDIT CUSTOMERS COMPONENT
+// CREDIT CUSTOMERS COMPONENT - UPDATED WITH SPECIFICATIONS
 // =============================================================================
 function CreditCustomers({ token, user }) {
   const [customers, setCustomers] = useState([]);
@@ -1336,6 +1358,9 @@ function CreditCustomers({ token, user }) {
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
+
+  // Selected Sale Details for showing specs
+  const [selectedSaleDetails, setSelectedSaleDetails] = useState(null);
 
   useEffect(() => {
     loadCustomers();
@@ -1375,6 +1400,15 @@ function CreditCustomers({ token, user }) {
     }
   };
 
+  // NEW: Handle sale selection to show specs
+  const handleSaleSelection = (saleId) => {
+    setPaymentData({...paymentData, sale_id: saleId});
+    
+    // Find the selected sale to show its details
+    const sale = customerDebts?.unsettled_sales?.find(s => s.sale_id === parseInt(saleId));
+    setSelectedSaleDetails(sale || null);
+  };
+
   const handlePayment = async (e) => {
     e.preventDefault();
     setPaymentLoading(true);
@@ -1402,6 +1436,7 @@ function CreditCustomers({ token, user }) {
 
       setPaymentMessage(`✓ Payment of ₦${parseFloat(data.amount_paid).toLocaleString()} recorded successfully!`);
       setPaymentData({ sale_id: '', amount: '' });
+      setSelectedSaleDetails(null);
       
       // Reload customer debts
       loadCustomerDebts(selectedCustomer.contact_info);
@@ -1419,13 +1454,13 @@ function CreditCustomers({ token, user }) {
     }
   };
 
-  // Customer Details View
+  // Customer Details View - UPDATED WITH SPECIFICATIONS
   if (view === 'details' && selectedCustomer) {
     return (
       <div className="credit-customers">
         <div className="page-header">
           <h2>Customer Details</h2>
-          <button className="btn secondary" onClick={() => { setView('list'); setSelectedCustomer(null); setCustomerDebts(null); }}>
+          <button className="btn secondary" onClick={() => { setView('list'); setSelectedCustomer(null); setCustomerDebts(null); setSelectedSaleDetails(null); }}>
             ← Back to Customers
           </button>
         </div>
@@ -1457,38 +1492,58 @@ function CreditCustomers({ token, user }) {
               )}
 
               <form onSubmit={handlePayment} className="payment-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Sale ID *</label>
-                    <select
-                      value={paymentData.sale_id}
-                      onChange={(e) => setPaymentData({...paymentData, sale_id: e.target.value})}
-                      required
-                    >
-                      <option value="">Select Sale</option>
-                      {customerDebts?.unsettled_sales?.map(sale => (
-                        <option key={sale.sale_id} value={sale.sale_id}>
-                          Sale #{sale.sale_id} - Owes ₦{parseFloat(sale.unsettled_balance).toLocaleString()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Amount (₦) *</label>
-                    <input
-                      type="number"
-                      value={paymentData.amount}
-                      onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
-                      placeholder="Enter payment amount"
-                      required
-                    />
-                  </div>
-
-                  <button type="submit" className="btn primary" disabled={paymentLoading}>
-                    {paymentLoading ? 'Processing...' : 'Record Payment'}
-                  </button>
+                <div className="form-group">
+                  <label>Sale ID *</label>
+                  <select
+                    value={paymentData.sale_id}
+                    onChange={(e) => handleSaleSelection(e.target.value)}
+                    required
+                  >
+                    <option value="">Select Sale</option>
+                    {customerDebts?.unsettled_sales?.map(sale => (
+                      <option key={sale.sale_id} value={sale.sale_id}>
+                        Sale #{sale.sale_id} - Owes ₦{parseFloat(sale.unsettled_balance).toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* NEW: Show selected sale details with specs */}
+                {selectedSaleDetails && (
+                  <div className="selected-sale-details">
+                    <h4>Sale #{selectedSaleDetails.sale_id} Items:</h4>
+                    {selectedSaleDetails.items?.map((item, idx) => (
+                      <div key={idx} className="sale-item-detail">
+                        <strong>{item.product_name}</strong>
+                        <span className="serial-number">S/N: {item.serial_number}</span>
+                        {item.specifications && (
+                          <span className="specs">Specs: {item.specifications}</span>
+                        )}
+                        <span className="price">₦{parseFloat(item.price).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {selectedSaleDetails.sales_note && (
+                      <div className="sale-note">
+                        <strong>Note:</strong> {selectedSaleDetails.sales_note}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Amount (₦) *</label>
+                  <input
+                    type="number"
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
+                    placeholder="Enter payment amount"
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn primary" disabled={paymentLoading}>
+                  {paymentLoading ? 'Processing...' : 'Record Payment'}
+                </button>
               </form>
             </div>
 
@@ -1511,11 +1566,26 @@ function CreditCustomers({ token, user }) {
                         <div className="debt-items">
                           {sale.items?.map((item, idx) => (
                             <div key={idx} className="debt-item">
-                              <span>{item.product_name}</span>
-                              <span>₦{parseFloat(item.price).toLocaleString()}</span>
+                              <div className="debt-item-main">
+                                <span className="product-name">{item.product_name}</span>
+                                <span>₦{parseFloat(item.price).toLocaleString()}</span>
+                              </div>
+                              {item.specifications && (
+                                <div className="debt-item-specs">
+                                  <small>Specs: {item.specifications}</small>
+                                </div>
+                              )}
+                              <div className="debt-item-serial">
+                                <small>S/N: {item.serial_number}</small>
+                              </div>
                             </div>
                           ))}
                         </div>
+                        {sale.sales_note && (
+                          <div className="sale-note-display">
+                            <strong>Note:</strong> {sale.sales_note}
+                          </div>
+                        )}
                         <div className="debt-totals">
                           <div className="debt-row">
                             <span>Total Amount:</span>
@@ -1595,9 +1665,8 @@ function CreditCustomers({ token, user }) {
     </div>
   );
 }
-
 // =============================================================================
-// BULK RESELLERS COMPONENT
+// BULK RESELLERS COMPONENT - UPDATED WITH DELETE AND RETURN FEATURES
 // =============================================================================
 function BulkResellers({ token, user }) {
   const [resellers, setResellers] = useState([]);
@@ -1607,40 +1676,30 @@ function BulkResellers({ token, user }) {
   const [creditBook, setCreditBook] = useState(null);
   const [branches, setBranches] = useState([]);
 
-  // Create Reseller Form
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createData, setCreateData] = useState({ name: '', contact_info: '' });
+  // Create Reseller State (Admin Only)
+  const [newReseller, setNewReseller] = useState({ name: '', contact_info: '' });
   const [createMessage, setCreateMessage] = useState('');
 
-  // Add Laptops Form
-  const [showAddLaptops, setShowAddLaptops] = useState(false);
+  // Add Laptops State
   const [addLaptopsData, setAddLaptopsData] = useState({
     branch_name: '',
     items: [{ serial_number: '', given_price: '' }]
   });
   const [addLaptopsMessage, setAddLaptopsMessage] = useState('');
 
-  // Payment Form
+  // Return Laptop State (NEW)
+  const [returnData, setReturnData] = useState({ serial_number: '' });
+  const [returnMessage, setReturnMessage] = useState('');
+  const [returnLoading, setReturnLoading] = useState(false);
+
+  // Payment State
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
-  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     loadResellers();
     loadBranches();
   }, []);
-
-  const loadBranches = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/branches`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setBranches(data.branches || []);
-    } catch (err) {
-      console.error('Error loading branches:', err);
-    }
-  };
 
   const loadResellers = async () => {
     setLoading(true);
@@ -1657,6 +1716,18 @@ function BulkResellers({ token, user }) {
     }
   };
 
+  const loadBranches = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/branches`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setBranches(data.branches || []);
+    } catch (err) {
+      console.error('Error loading branches:', err);
+    }
+  };
+
   const loadCreditBook = async (resellerId) => {
     setLoading(true);
     try {
@@ -1666,7 +1737,7 @@ function BulkResellers({ token, user }) {
       const data = await res.json();
       setCreditBook(data);
       setSelectedReseller(data.reseller);
-      setView('credit-book');
+      setView('details');
     } catch (err) {
       console.error('Error loading credit book:', err);
     } finally {
@@ -1685,7 +1756,7 @@ function BulkResellers({ token, user }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(createData)
+        body: JSON.stringify(newReseller)
       });
 
       const data = await res.json();
@@ -1695,11 +1766,37 @@ function BulkResellers({ token, user }) {
       }
 
       setCreateMessage(`✓ ${data.message}`);
-      setCreateData({ name: '', contact_info: '' });
+      setNewReseller({ name: '', contact_info: '' });
       loadResellers();
 
     } catch (err) {
       setCreateMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  // NEW: Delete Reseller (Admin Only)
+  const handleDeleteReseller = async (resellerId, resellerName) => {
+    if (!window.confirm(`Are you sure you want to delete "${resellerName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${resellerId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete reseller');
+      }
+
+      alert(`✓ ${data.message}`);
+      loadResellers();
+
+    } catch (err) {
+      alert(`✗ Error: ${err.message}`);
     }
   };
 
@@ -1737,7 +1834,7 @@ function BulkResellers({ token, user }) {
           branch_name: addLaptopsData.branch_name,
           items: addLaptopsData.items.map(item => ({
             serial_number: item.serial_number,
-            given_price: parseFloat(item.given_price)
+            given_price: parseFloat(item.given_price) || 0
           }))
         })
       });
@@ -1749,17 +1846,54 @@ function BulkResellers({ token, user }) {
       }
 
       setAddLaptopsMessage(`✓ ${data.message}`);
-      setAddLaptopsData({ branch_name: '', items: [{ serial_number: '', given_price: '' }] });
+      setAddLaptopsData({
+        branch_name: '',
+        items: [{ serial_number: '', given_price: '' }]
+      });
       loadCreditBook(selectedReseller.id);
+      loadResellers();
 
     } catch (err) {
       setAddLaptopsMessage(`✗ Error: ${err.message}`);
     }
   };
 
+  // NEW: Return Laptop from Bulk Reseller
+  const handleReturnLaptop = async (e) => {
+    e.preventDefault();
+    setReturnMessage('');
+    setReturnLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/return-laptop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ serial_number: returnData.serial_number })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to return laptop');
+      }
+
+      setReturnMessage(`✓ ${data.message} - Amount reduced: ₦${parseFloat(data.amount_reduced).toLocaleString()}`);
+      setReturnData({ serial_number: '' });
+      loadCreditBook(selectedReseller.id);
+      loadResellers();
+
+    } catch (err) {
+      setReturnMessage(`✗ Error: ${err.message}`);
+    } finally {
+      setReturnLoading(false);
+    }
+  };
+
   const handlePayment = async (e) => {
     e.preventDefault();
-    setPaymentLoading(true);
     setPaymentMessage('');
 
     try {
@@ -1775,33 +1909,30 @@ function BulkResellers({ token, user }) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to process payment');
+        throw new Error(data.error || 'Failed to record payment');
       }
 
-      setPaymentMessage(`✓ Payment of ₦${parseFloat(data.amount_paid).toLocaleString()} recorded. Balance: ₦${parseFloat(data.balance_left).toLocaleString()}`);
+      setPaymentMessage(`✓ Payment of ₦${parseFloat(data.amount_paid).toLocaleString()} recorded!`);
       setPaymentAmount('');
       loadCreditBook(selectedReseller.id);
       loadResellers();
 
-      // Open receipt
       if (data.receipt_url) {
         window.open(`${API_BASE}${data.receipt_url}`, '_blank');
       }
 
     } catch (err) {
       setPaymentMessage(`✗ Error: ${err.message}`);
-    } finally {
-      setPaymentLoading(false);
     }
   };
 
-  // Create Reseller Form View
-  if (showCreateForm) {
+  // Create Reseller View (Admin Only)
+  if (view === 'create' && user?.role === 'admin') {
     return (
       <div className="bulk-resellers">
         <div className="page-header">
           <h2>Create Bulk Reseller</h2>
-          <button className="btn secondary" onClick={() => setShowCreateForm(false)}>
+          <button className="btn secondary" onClick={() => setView('list')}>
             ← Back
           </button>
         </div>
@@ -1818,19 +1949,19 @@ function BulkResellers({ token, user }) {
               <label>Reseller Name *</label>
               <input
                 type="text"
-                value={createData.name}
-                onChange={(e) => setCreateData({...createData, name: e.target.value})}
-                placeholder="e.g., Emeka Electronics"
+                value={newReseller.name}
+                onChange={(e) => setNewReseller({...newReseller, name: e.target.value})}
+                placeholder="Enter business/reseller name"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>Phone Number *</label>
+              <label>Contact Phone *</label>
               <input
                 type="text"
-                value={createData.contact_info}
-                onChange={(e) => setCreateData({...createData, contact_info: e.target.value})}
+                value={newReseller.contact_info}
+                onChange={(e) => setNewReseller({...newReseller, contact_info: e.target.value})}
                 placeholder="e.g., 08012345678"
                 required
               />
@@ -1845,97 +1976,12 @@ function BulkResellers({ token, user }) {
     );
   }
 
-  // Add Laptops Form View
-  if (showAddLaptops && selectedReseller) {
+  // Reseller Details View - UPDATED WITH RETURN FEATURE
+  if (view === 'details' && selectedReseller) {
     return (
       <div className="bulk-resellers">
         <div className="page-header">
-          <h2>Add Laptops to {selectedReseller.name}</h2>
-          <button className="btn secondary" onClick={() => setShowAddLaptops(false)}>
-            ← Back
-          </button>
-        </div>
-
-        <div className="form-container">
-          {addLaptopsMessage && (
-            <div className={addLaptopsMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
-              {addLaptopsMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleAddLaptops}>
-            <div className="form-group">
-              <label>Branch *</label>
-              <select
-                value={addLaptopsData.branch_name}
-                onChange={(e) => setAddLaptopsData({...addLaptopsData, branch_name: e.target.value})}
-                required
-              >
-                <option value="">Select Branch</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-section">
-              <div className="section-header">
-                <h3>Laptops</h3>
-                <button type="button" className="btn small secondary" onClick={addLaptopItem}>
-                  + Add More
-                </button>
-              </div>
-
-              {addLaptopsData.items.map((item, index) => (
-                <div key={index} className="item-row">
-                  <div className="form-group">
-                    <label>Serial Number *</label>
-                    <input
-                      type="text"
-                      value={item.serial_number}
-                      onChange={(e) => updateLaptopItem(index, 'serial_number', e.target.value)}
-                      placeholder="Enter serial number"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Given Price (₦) *</label>
-                    <input
-                      type="number"
-                      value={item.given_price}
-                      onChange={(e) => updateLaptopItem(index, 'given_price', e.target.value)}
-                      placeholder="Price given to reseller"
-                      required
-                    />
-                  </div>
-                  {addLaptopsData.items.length > 1 && (
-                    <button 
-                      type="button" 
-                      className="btn small danger"
-                      onClick={() => removeLaptopItem(index)}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <button type="submit" className="btn primary">
-              Add Laptops to Credit Book
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // Credit Book View
-  if (view === 'credit-book' && selectedReseller) {
-    return (
-      <div className="bulk-resellers">
-        <div className="page-header">
-          <h2>{selectedReseller.name}'s Credit Book</h2>
+          <h2>{selectedReseller.name}</h2>
           <button className="btn secondary" onClick={() => { setView('list'); setSelectedReseller(null); setCreditBook(null); }}>
             ← Back to Resellers
           </button>
@@ -1945,23 +1991,115 @@ function BulkResellers({ token, user }) {
           <div className="loading">Loading...</div>
         ) : (
           <>
-            <div className="reseller-summary">
-              <div className="summary-card">
-                <span className="label">Total Laptops</span>
-                <span className="value">{creditBook?.total_items || 0}</span>
-              </div>
-              <div className="summary-card">
-                <span className="label">Total Owed</span>
-                <span className="value owing">₦{parseFloat(creditBook?.total_owed || 0).toLocaleString()}</span>
+            <div className="reseller-info-card">
+              <div className="reseller-header">
+                <div>
+                  <h3>{selectedReseller.name}</h3>
+                  <p>{selectedReseller.contact_info}</p>
+                </div>
+                <div className="reseller-balance">
+                  <span className="balance-label">Total Owed</span>
+                  <span className="balance-amount">₦{parseFloat(selectedReseller.open_balance || 0).toLocaleString()}</span>
+                </div>
               </div>
             </div>
 
-            <div className="action-buttons">
-              <button className="btn primary" onClick={() => setShowAddLaptops(true)}>
-                + Add Laptops
-              </button>
+            {/* Add Laptops Section */}
+            <div className="section">
+              <h3>Add Laptops to Credit Book</h3>
+              
+              {addLaptopsMessage && (
+                <div className={addLaptopsMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+                  {addLaptopsMessage}
+                </div>
+              )}
+
+              <form onSubmit={handleAddLaptops}>
+                <div className="form-group">
+                  <label>Branch *</label>
+                  <select
+                    value={addLaptopsData.branch_name}
+                    onChange={(e) => setAddLaptopsData({...addLaptopsData, branch_name: e.target.value})}
+                    required
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {addLaptopsData.items.map((item, index) => (
+                  <div key={index} className="item-row">
+                    <div className="form-group">
+                      <input
+                        type="text"
+                        value={item.serial_number}
+                        onChange={(e) => updateLaptopItem(index, 'serial_number', e.target.value)}
+                        placeholder="Serial Number"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <input
+                        type="number"
+                        value={item.given_price}
+                        onChange={(e) => updateLaptopItem(index, 'given_price', e.target.value)}
+                        placeholder="Given Price (₦)"
+                        required
+                      />
+                    </div>
+                    {addLaptopsData.items.length > 1 && (
+                      <button type="button" className="btn small danger" onClick={() => removeLaptopItem(index)}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="form-actions">
+                  <button type="button" className="btn small secondary" onClick={addLaptopItem}>
+                    + Add Another
+                  </button>
+                  <button type="submit" className="btn primary">
+                    Add to Credit Book
+                  </button>
+                </div>
+              </form>
             </div>
 
+            {/* NEW: Return Laptop Section */}
+            <div className="section">
+              <h3>Return Laptop from Credit Book</h3>
+              
+              {returnMessage && (
+                <div className={returnMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+                  {returnMessage}
+                </div>
+              )}
+
+              <form onSubmit={handleReturnLaptop} className="inline-form">
+                <div className="form-group">
+                  <input
+                    type="text"
+                    value={returnData.serial_number}
+                    onChange={(e) => setReturnData({ serial_number: e.target.value })}
+                    placeholder="Enter serial number to return"
+                    required
+                  />
+                </div>
+                <button type="submit" className="btn primary" disabled={returnLoading}>
+                  {returnLoading ? 'Returning...' : 'Return Laptop'}
+                </button>
+              </form>
+              
+              <div className="form-tip">
+                <strong>💡 Note:</strong> Returning a laptop removes it from the credit book, 
+                restores it to inventory, and reduces the amount owed.
+              </div>
+            </div>
+
+            {/* Payment Section */}
             <div className="section">
               <h3>Record Payment</h3>
               
@@ -1971,27 +2109,28 @@ function BulkResellers({ token, user }) {
                 </div>
               )}
 
-              <form onSubmit={handlePayment} className="payment-form inline">
+              <form onSubmit={handlePayment} className="inline-form">
                 <div className="form-group">
                   <input
                     type="number"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    placeholder="Enter payment amount"
+                    placeholder="Enter payment amount (₦)"
                     required
                   />
                 </div>
-                <button type="submit" className="btn primary" disabled={paymentLoading}>
-                  {paymentLoading ? 'Processing...' : 'Record Payment'}
+                <button type="submit" className="btn primary">
+                  Record Payment
                 </button>
               </form>
             </div>
 
+            {/* Credit Book Items */}
             <div className="section">
-              <h3>Laptops in Credit Book</h3>
+              <h3>Credit Book ({creditBook?.total_items || 0} items)</h3>
               
               {creditBook?.items?.length === 0 ? (
-                <div className="empty-state">No laptops in credit book yet.</div>
+                <div className="empty-state">No items in credit book.</div>
               ) : (
                 <div className="table-container">
                   <table>
@@ -1999,6 +2138,7 @@ function BulkResellers({ token, user }) {
                       <tr>
                         <th>Product</th>
                         <th>Serial Number</th>
+                        <th>Specifications</th>
                         <th>Given Price</th>
                         <th>Date Added</th>
                       </tr>
@@ -2006,8 +2146,9 @@ function BulkResellers({ token, user }) {
                     <tbody>
                       {creditBook?.items?.map(item => (
                         <tr key={item.id}>
-                          <td>{item.product_name}</td>
+                          <td className="product-name">{item.product_name}</td>
                           <td className="serial-number">{item.serial_number}</td>
+                          <td>{item.specifications || '-'}</td>
                           <td>₦{parseFloat(item.given_price).toLocaleString()}</td>
                           <td>{new Date(item.created_at).toLocaleDateString()}</td>
                         </tr>
@@ -2023,14 +2164,14 @@ function BulkResellers({ token, user }) {
     );
   }
 
-  // Resellers List View
+  // Resellers List View - UPDATED WITH DELETE BUTTON
   return (
     <div className="bulk-resellers">
       <div className="page-header">
         <h2>Bulk Resellers</h2>
         {user?.role === 'admin' && (
-          <button className="btn primary" onClick={() => setShowCreateForm(true)}>
-            + Add Reseller
+          <button className="btn primary" onClick={() => setView('create')}>
+            + New Reseller
           </button>
         )}
       </div>
@@ -2045,7 +2186,7 @@ function BulkResellers({ token, user }) {
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Total Purchases</th>
-                <th>Balance Owed</th>
+                <th>Open Balance</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -2053,7 +2194,7 @@ function BulkResellers({ token, user }) {
               {resellers.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="empty-state">
-                    No bulk resellers yet. Click "Add Reseller" to create one.
+                    No bulk resellers yet. {user?.role === 'admin' ? 'Click "New Reseller" to add one.' : 'Contact admin to add resellers.'}
                   </td>
                 </tr>
               ) : (
@@ -2067,13 +2208,21 @@ function BulkResellers({ token, user }) {
                         ₦{parseFloat(reseller.open_balance || 0).toLocaleString()}
                       </span>
                     </td>
-                    <td>
+                    <td className="action-buttons">
                       <button 
                         className="btn small primary"
                         onClick={() => loadCreditBook(reseller.id)}
                       >
-                        View Credit Book
+                        View Details
                       </button>
+                      {user?.role === 'admin' && (
+                        <button 
+                          className="btn small danger"
+                          onClick={() => handleDeleteReseller(reseller.id, reseller.name)}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -2085,31 +2234,28 @@ function BulkResellers({ token, user }) {
     </div>
   );
 }
+
 // =============================================================================
-// REPORTS COMPONENT
+// REPORTS COMPONENT - UPDATED WITH SALES_NOTE
 // =============================================================================
 function Reports({ token, user }) {
   const [reportType, setReportType] = useState('daily');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState([]);
-  
-  // Filter State
-  const [filters, setFilters] = useState({
-    branch_name: '',
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-    start_date: '',
-    end_date: ''
-  });
+  const [selectedBranch, setSelectedBranch] = useState('');
+
+  // Custom filters
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
-    loadBranches();
+    if (user?.role === 'admin') {
+      loadBranches();
+    }
   }, []);
-
-  useEffect(() => {
-    loadReport();
-  }, [reportType]);
 
   const loadBranches = async () => {
     try {
@@ -2123,31 +2269,30 @@ function Reports({ token, user }) {
     }
   };
 
-  const loadReport = async () => {
+  const generateReport = async () => {
     setLoading(true);
     setReportData(null);
 
     try {
-      let url = `${API_BASE}/reports/${reportType}?`;
+      let url = `${API_BASE}/reports/${reportType}`;
+      const params = new URLSearchParams();
 
-      if (filters.branch_name) {
-        url += `branch_name=${encodeURIComponent(filters.branch_name)}&`;
+      if (selectedBranch) {
+        params.append('branch_name', selectedBranch);
       }
 
       if (reportType === 'monthly') {
-        url += `month=${filters.month}&year=${filters.year}&`;
+        params.append('month', month);
+        params.append('year', year);
+      } else if (reportType === 'yearly') {
+        params.append('year', year);
+      } else if (reportType === 'custom') {
+        params.append('start_date', startDate);
+        params.append('end_date', endDate);
       }
 
-      if (reportType === 'yearly') {
-        url += `year=${filters.year}&`;
-      }
-
-      if (reportType === 'custom') {
-        if (!filters.start_date || !filters.end_date) {
-          setLoading(false);
-          return;
-        }
-        url += `start_date=${filters.start_date}&end_date=${filters.end_date}&`;
+      if (params.toString()) {
+        url += `?${params.toString()}`;
       }
 
       const res = await fetch(url, {
@@ -2157,226 +2302,179 @@ function Reports({ token, user }) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to load report');
+        throw new Error(data.error || 'Failed to generate report');
       }
 
       setReportData(data);
 
     } catch (err) {
-      console.error('Error loading report:', err);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const printReceipt = (saleId) => {
-    window.open(`${API_BASE}/receipt/sale/${saleId}`, '_blank');
-  };
-
-  const months = [
-    { value: 1, label: 'January' },
-    { value: 2, label: 'February' },
-    { value: 3, label: 'March' },
-    { value: 4, label: 'April' },
-    { value: 5, label: 'May' },
-    { value: 6, label: 'June' },
-    { value: 7, label: 'July' },
-    { value: 8, label: 'August' },
-    { value: 9, label: 'September' },
-    { value: 10, label: 'October' },
-    { value: 11, label: 'November' },
-    { value: 12, label: 'December' }
-  ];
-
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear; y >= currentYear - 5; y--) {
-    years.push(y);
-  }
-
   return (
     <div className="reports">
-      <div className="page-header">
-        <h2>Sales Reports</h2>
-      </div>
+      <h2>Reports</h2>
 
-      <div className="report-filters">
-        <div className="filter-row">
-          <div className="filter-group">
-            <label>Report Type</label>
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="custom">Custom Range</option>
+      <div className="report-controls">
+        <div className="form-group">
+          <label>Report Type</label>
+          <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
+            <option value="daily">Daily Report</option>
+            <option value="weekly">Weekly Report</option>
+            <option value="monthly">Monthly Report</option>
+            <option value="yearly">Yearly Report</option>
+            <option value="custom">Custom Date Range</option>
+          </select>
+        </div>
+
+        {user?.role === 'admin' && (
+          <div className="form-group">
+            <label>Branch Filter</label>
+            <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}>
+              <option value="">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.name}>{b.name}</option>
+              ))}
             </select>
           </div>
+        )}
 
-          {user?.role === 'admin' && (
-            <div className="filter-group">
-              <label>Branch</label>
-              <select
-                value={filters.branch_name}
-                onChange={(e) => setFilters({...filters, branch_name: e.target.value})}
-              >
-                <option value="">All Branches</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.name}>{b.name}</option>
+        {reportType === 'monthly' && (
+          <>
+            <div className="form-group">
+              <label>Month</label>
+              <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))}>
+                {[...Array(12)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(2000, i, 1).toLocaleString('default', { month: 'long' })}
+                  </option>
                 ))}
               </select>
             </div>
-          )}
-
-          {reportType === 'monthly' && (
-            <>
-              <div className="filter-group">
-                <label>Month</label>
-                <select
-                  value={filters.month}
-                  onChange={(e) => setFilters({...filters, month: parseInt(e.target.value)})}
-                >
-                  {months.map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="filter-group">
-                <label>Year</label>
-                <select
-                  value={filters.year}
-                  onChange={(e) => setFilters({...filters, year: parseInt(e.target.value)})}
-                >
-                  {years.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {reportType === 'yearly' && (
-            <div className="filter-group">
+            <div className="form-group">
               <label>Year</label>
-              <select
-                value={filters.year}
-                onChange={(e) => setFilters({...filters, year: parseInt(e.target.value)})}
-              >
-                {years.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+              <input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value))}
+                min="2020"
+                max="2030"
+              />
             </div>
-          )}
+          </>
+        )}
 
-          {reportType === 'custom' && (
-            <>
-              <div className="filter-group">
-                <label>Start Date</label>
-                <input
-                  type="date"
-                  value={filters.start_date}
-                  onChange={(e) => setFilters({...filters, start_date: e.target.value})}
-                />
-              </div>
-              <div className="filter-group">
-                <label>End Date</label>
-                <input
-                  type="date"
-                  value={filters.end_date}
-                  onChange={(e) => setFilters({...filters, end_date: e.target.value})}
-                />
-              </div>
-            </>
-          )}
+        {reportType === 'yearly' && (
+          <div className="form-group">
+            <label>Year</label>
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(parseInt(e.target.value))}
+              min="2020"
+              max="2030"
+            />
+          </div>
+        )}
 
-          <button className="btn primary" onClick={loadReport}>
-            Generate Report
-          </button>
-        </div>
+        {reportType === 'custom' && (
+          <>
+            <div className="form-group">
+              <label>Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                required
+              />
+            </div>
+          </>
+        )}
+
+        <button className="btn primary" onClick={generateReport} disabled={loading}>
+          {loading ? 'Generating...' : 'Generate Report'}
+        </button>
       </div>
 
-      {loading ? (
-        <div className="loading">Generating report...</div>
-      ) : reportData ? (
-        <div className="report-content">
+      {reportData && (
+        <div className="report-results">
           <div className="report-summary">
             <div className="summary-card">
-              <span className="label">Total Cost</span>
-              <span className="value">₦{parseFloat(reportData.totals?.total_cost || 0).toLocaleString()}</span>
+              <h4>Total Sales</h4>
+              <p>{reportData.sales?.length || 0}</p>
             </div>
             <div className="summary-card">
-              <span className="label">Total Revenue</span>
-              <span className="value">₦{parseFloat(reportData.totals?.total_revenue || 0).toLocaleString()}</span>
+              <h4>Total Revenue</h4>
+              <p>₦{(reportData.totals?.total_revenue || 0).toLocaleString()}</p>
             </div>
-            <div className="summary-card highlight">
-              <span className="label">Total Profit</span>
-              <span className="value">₦{parseFloat(reportData.totals?.total_profit || 0).toLocaleString()}</span>
+            <div className="summary-card">
+              <h4>Total Cost</h4>
+              <p>₦{(reportData.totals?.total_cost || 0).toLocaleString()}</p>
+            </div>
+            <div className="summary-card profit">
+              <h4>Total Profit</h4>
+              <p>₦{(reportData.totals?.total_profit || 0).toLocaleString()}</p>
             </div>
           </div>
 
-          <div className="report-table">
-            <h3>Sales Details ({reportData.sales?.length || 0} transactions)</h3>
-            
-            {reportData.sales?.length === 0 ? (
-              <div className="empty-state">No sales found for this period.</div>
-            ) : (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Sale ID</th>
-                      <th>Date</th>
-                      <th>Product</th>
-                      <th>Serial</th>
-                      <th>Customer</th>
-                      <th>Type</th>
-                      <th>Cost</th>
-                      <th>Sale Price</th>
-                      <th>Profit</th>
-                      <th>Actions</th>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Sale ID</th>
+                  <th>Product</th>
+                  <th>Serial Number</th>
+                  <th>Customer</th>
+                  <th>Type</th>
+                  <th>Sale Price</th>
+                  <th>Profit</th>
+                  {user?.role === 'admin' && <th>Branch</th>}
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.sales?.length === 0 ? (
+                  <tr>
+                    <td colSpan={user?.role === 'admin' ? 10 : 9} className="empty-state">
+                      No sales found for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  reportData.sales?.map((sale, idx) => (
+                    <tr key={idx}>
+                      <td>{new Date(sale.created_at).toLocaleDateString()}</td>
+                      <td>#{sale.sale_id}</td>
+                      <td className="product-name">{sale.product_name}</td>
+                      <td className="serial-number">{sale.serial_number}</td>
+                      <td>{sale.customer_name}</td>
+                      <td>
+                        <span className={`type-badge ${sale.payment_type}`}>
+                          {sale.payment_type}
+                        </span>
+                      </td>
+                      <td>₦{parseFloat(sale.sale_price).toLocaleString()}</td>
+                      <td className="profit">₦{parseFloat(sale.profit).toLocaleString()}</td>
+                      {user?.role === 'admin' && <td>{sale.branch_name}</td>}
+                      <td className="note-cell">{sale.sales_note || '-'}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {reportData.sales?.map((sale, idx) => (
-                      <tr key={idx}>
-                        <td>#{sale.sale_id}</td>
-                        <td>{new Date(sale.sale_date || sale.created_at).toLocaleDateString()}</td>
-                        <td>{sale.product_name}</td>
-                        <td className="serial-number">{sale.serial_number}</td>
-                        <td>{sale.customer_name}</td>
-                        <td>
-                          <span className={`payment-type ${sale.payment_type}`}>
-                            {sale.payment_type}
-                          </span>
-                        </td>
-                        <td>₦{parseFloat(sale.cost_price).toLocaleString()}</td>
-                        <td>₦{parseFloat(sale.sale_price).toLocaleString()}</td>
-                        <td className="profit">₦{parseFloat(sale.profit).toLocaleString()}</td>
-                        <td>
-                          {sale.payment_type === 'cash' && (
-                            <button 
-                              className="btn small secondary"
-                              onClick={() => printReceipt(sale.sale_id)}
-                            >
-                              🖨 Receipt
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      ) : (
-        <div className="empty-state">
-          Select filters and click "Generate Report" to view sales data.
         </div>
       )}
     </div>
@@ -2393,32 +2491,20 @@ function SupplierReports({ token, user }) {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // Create Report Form
-  const [formData, setFormData] = useState({
+  // New Report State
+  const [newReport, setNewReport] = useState({
     supplier_name: '',
     total_supplied: '',
     good_units: '',
-    faults: [{ fault_type: '', count: '' }],
+    faults: [{ description: '', count: '' }],
     notes: ''
   });
-  const [formMessage, setFormMessage] = useState('');
+  const [createMessage, setCreateMessage] = useState('');
 
   useEffect(() => {
     loadReports();
     loadSuppliers();
   }, []);
-
-  const loadSuppliers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/suppliers`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setSuppliers(data.suppliers || []);
-    } catch (err) {
-      console.error('Error loading suppliers:', err);
-    }
-  };
 
   const loadReports = async () => {
     setLoading(true);
@@ -2435,47 +2521,57 @@ function SupplierReports({ token, user }) {
     }
   };
 
+  const loadSuppliers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/suppliers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setSuppliers(data.suppliers || []);
+    } catch (err) {
+      console.error('Error loading suppliers:', err);
+    }
+  };
+
   const addFault = () => {
-    setFormData({
-      ...formData,
-      faults: [...formData.faults, { fault_type: '', count: '' }]
+    setNewReport({
+      ...newReport,
+      faults: [...newReport.faults, { description: '', count: '' }]
     });
   };
 
   const removeFault = (index) => {
-    if (formData.faults.length === 1) return;
-    const newFaults = formData.faults.filter((_, i) => i !== index);
-    setFormData({ ...formData, faults: newFaults });
+    if (newReport.faults.length === 1) return;
+    const newFaults = newReport.faults.filter((_, i) => i !== index);
+    setNewReport({ ...newReport, faults: newFaults });
   };
 
   const updateFault = (index, field, value) => {
-    const newFaults = [...formData.faults];
+    const newFaults = [...newReport.faults];
     newFaults[index][field] = value;
-    setFormData({ ...formData, faults: newFaults });
+    setNewReport({ ...newReport, faults: newFaults });
   };
 
-  const handleSubmit = async (e) => {
+  const handleCreateReport = async (e) => {
     e.preventDefault();
-    setFormMessage('');
+    setCreateMessage('');
 
     try {
-      const payload = {
-        supplier_name: formData.supplier_name,
-        total_supplied: parseInt(formData.total_supplied),
-        good_units: parseInt(formData.good_units),
-        faults: formData.faults
-          .filter(f => f.fault_type && f.count)
-          .map(f => ({ fault_type: f.fault_type, count: parseInt(f.count) })),
-        notes: formData.notes
-      };
-
       const res = await fetch(`${API_BASE}/supplier-reports`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...newReport,
+          total_supplied: parseInt(newReport.total_supplied),
+          good_units: parseInt(newReport.good_units),
+          faults: newReport.faults.map(f => ({
+            description: f.description,
+            count: parseInt(f.count) || 0
+          }))
+        })
       });
 
       const data = await res.json();
@@ -2484,131 +2580,45 @@ function SupplierReports({ token, user }) {
         throw new Error(data.error || 'Failed to create report');
       }
 
-      setFormMessage(`✓ Report created successfully!`);
-      setFormData({
+      setCreateMessage(`✓ Report created successfully!`);
+      setNewReport({
         supplier_name: '',
         total_supplied: '',
         good_units: '',
-        faults: [{ fault_type: '', count: '' }],
+        faults: [{ description: '', count: '' }],
         notes: ''
       });
       loadReports();
 
     } catch (err) {
-      setFormMessage(`✗ Error: ${err.message}`);
+      setCreateMessage(`✗ Error: ${err.message}`);
     }
   };
 
-  const commonFaultTypes = [
-    'Bad Keyboard',
-    'Bad Screen',
-    'Not Charging',
-    'Touchpad Issues',
-    'Dead Pixels',
-    'Battery Issues',
-    'Speaker Issues',
-    'USB Port Issues',
-    'Hinge Problems',
-    'Other'
-  ];
-
-  // Report Details View
-  if (view === 'details' && selectedReport) {
-    const faults = typeof selectedReport.faults_breakdown === 'string' 
-      ? JSON.parse(selectedReport.faults_breakdown) 
-      : selectedReport.faults_breakdown;
-
-    return (
-      <div className="supplier-reports">
-        <div className="page-header">
-          <h2>Report Details</h2>
-          <button className="btn secondary" onClick={() => { setView('list'); setSelectedReport(null); }}>
-            ← Back to Reports
-          </button>
-        </div>
-
-        <div className="report-detail-card">
-          <div className="detail-header">
-            <h3>{selectedReport.supplier_name}</h3>
-            <span className="report-date">
-              {new Date(selectedReport.created_at).toLocaleDateString()}
-            </span>
-          </div>
-
-          <div className="detail-summary">
-            <div className="summary-item">
-              <span className="label">Total Supplied</span>
-              <span className="value">{selectedReport.total_supplied}</span>
-            </div>
-            <div className="summary-item good">
-              <span className="label">Good Units</span>
-              <span className="value">{selectedReport.good_units}</span>
-            </div>
-            <div className="summary-item bad">
-              <span className="label">Faulty Units</span>
-              <span className="value">{selectedReport.total_faulty}</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Success Rate</span>
-              <span className="value">
-                {((selectedReport.good_units / selectedReport.total_supplied) * 100).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-
-          {faults && faults.length > 0 && (
-            <div className="faults-breakdown">
-              <h4>Faults Breakdown</h4>
-              <div className="faults-list">
-                {faults.map((fault, idx) => (
-                  <div key={idx} className="fault-item">
-                    <span className="fault-type">{fault.fault_type}</span>
-                    <span className="fault-count">{fault.count} units</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedReport.notes && (
-            <div className="report-notes">
-              <h4>Notes</h4>
-              <p>{selectedReport.notes}</p>
-            </div>
-          )}
-
-          <div className="report-meta">
-            <span>Reported by: {selectedReport.reported_by}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Create Report Form View
+  // Create Report View
   if (view === 'create') {
     return (
       <div className="supplier-reports">
         <div className="page-header">
-          <h2>Create Supplier Fault Report</h2>
+          <h2>New Supplier Report</h2>
           <button className="btn secondary" onClick={() => setView('list')}>
-            ← Back to Reports
+            ← Back
           </button>
         </div>
 
         <div className="form-container">
-          {formMessage && (
-            <div className={formMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
-              {formMessage}
+          {createMessage && (
+            <div className={createMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+              {createMessage}
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleCreateReport}>
             <div className="form-group">
               <label>Supplier *</label>
               <select
-                value={formData.supplier_name}
-                onChange={(e) => setFormData({...formData, supplier_name: e.target.value})}
+                value={newReport.supplier_name}
+                onChange={(e) => setNewReport({...newReport, supplier_name: e.target.value})}
                 required
               >
                 <option value="">Select Supplier</option>
@@ -2623,8 +2633,8 @@ function SupplierReports({ token, user }) {
                 <label>Total Units Supplied *</label>
                 <input
                   type="number"
-                  value={formData.total_supplied}
-                  onChange={(e) => setFormData({...formData, total_supplied: e.target.value})}
+                  value={newReport.total_supplied}
+                  onChange={(e) => setNewReport({...newReport, total_supplied: e.target.value})}
                   placeholder="e.g., 50"
                   required
                 />
@@ -2634,8 +2644,8 @@ function SupplierReports({ token, user }) {
                 <label>Good Units *</label>
                 <input
                   type="number"
-                  value={formData.good_units}
-                  onChange={(e) => setFormData({...formData, good_units: e.target.value})}
+                  value={newReport.good_units}
+                  onChange={(e) => setNewReport({...newReport, good_units: e.target.value})}
                   placeholder="e.g., 45"
                   required
                 />
@@ -2644,41 +2654,32 @@ function SupplierReports({ token, user }) {
 
             <div className="form-section">
               <div className="section-header">
-                <h3>Faults</h3>
+                <h3>Fault Breakdown</h3>
                 <button type="button" className="btn small secondary" onClick={addFault}>
-                  + Add Fault
+                  + Add Fault Type
                 </button>
               </div>
 
-              {formData.faults.map((fault, index) => (
-                <div key={index} className="fault-row">
+              {newReport.faults.map((fault, index) => (
+                <div key={index} className="item-row">
                   <div className="form-group">
-                    <label>Fault Type</label>
-                    <select
-                      value={fault.fault_type}
-                      onChange={(e) => updateFault(index, 'fault_type', e.target.value)}
-                    >
-                      <option value="">Select Fault Type</option>
-                      {commonFaultTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
+                    <input
+                      type="text"
+                      value={fault.description}
+                      onChange={(e) => updateFault(index, 'description', e.target.value)}
+                      placeholder="Fault description (e.g., Screen issue)"
+                    />
                   </div>
                   <div className="form-group">
-                    <label>Count</label>
                     <input
                       type="number"
                       value={fault.count}
                       onChange={(e) => updateFault(index, 'count', e.target.value)}
-                      placeholder="Number of units"
+                      placeholder="Count"
                     />
                   </div>
-                  {formData.faults.length > 1 && (
-                    <button 
-                      type="button" 
-                      className="btn small danger"
-                      onClick={() => removeFault(index)}
-                    >
+                  {newReport.faults.length > 1 && (
+                    <button type="button" className="btn small danger" onClick={() => removeFault(index)}>
                       ✕
                     </button>
                   )}
@@ -2687,11 +2688,11 @@ function SupplierReports({ token, user }) {
             </div>
 
             <div className="form-group">
-              <label>Notes (Optional)</label>
+              <label>Notes</label>
               <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                placeholder="Additional notes about this delivery..."
+                value={newReport.notes}
+                onChange={(e) => setNewReport({...newReport, notes: e.target.value})}
+                placeholder="Any additional notes..."
                 rows="3"
               />
             </div>
@@ -2705,11 +2706,80 @@ function SupplierReports({ token, user }) {
     );
   }
 
+  // Report Details View
+  if (view === 'details' && selectedReport) {
+    const faults = typeof selectedReport.faults_breakdown === 'string' 
+      ? JSON.parse(selectedReport.faults_breakdown) 
+      : selectedReport.faults_breakdown;
+
+    return (
+      <div className="supplier-reports">
+        <div className="page-header">
+          <h2>Report Details</h2>
+          <button className="btn secondary" onClick={() => { setView('list'); setSelectedReport(null); }}>
+            ← Back
+          </button>
+        </div>
+
+        <div className="report-details-card">
+          <div className="detail-row">
+            <span className="label">Supplier:</span>
+            <span className="value">{selectedReport.supplier_name}</span>
+          </div>
+          <div className="detail-row">
+            <span className="label">Date:</span>
+            <span className="value">{new Date(selectedReport.created_at).toLocaleString()}</span>
+          </div>
+          <div className="detail-row">
+            <span className="label">Reported By:</span>
+            <span className="value">{selectedReport.reported_by}</span>
+          </div>
+
+          <div className="stats-row">
+            <div className="stat">
+              <span className="stat-value">{selectedReport.total_supplied}</span>
+              <span className="stat-label">Total Supplied</span>
+            </div>
+            <div className="stat good">
+              <span className="stat-value">{selectedReport.good_units}</span>
+              <span className="stat-label">Good Units</span>
+            </div>
+            <div className="stat bad">
+              <span className="stat-value">{selectedReport.total_faulty}</span>
+              <span className="stat-label">Faulty Units</span>
+            </div>
+          </div>
+
+          {faults && faults.length > 0 && (
+            <div className="faults-section">
+              <h4>Fault Breakdown</h4>
+              <ul>
+                {faults.map((fault, idx) => (
+                  <li key={idx}>
+                    <span className="fault-desc">{fault.description}</span>
+                    <span className="fault-count">{fault.count} unit(s)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {selectedReport.notes && (
+            <div className="notes-section">
+              <h4>Notes</h4>
+              <p>{selectedReport.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Reports List View
   return (
     <div className="supplier-reports">
       <div className="page-header">
-        <h2>Supplier Fault Reports</h2>
+        <h2>Supplier Reports</h2>
         <button className="btn primary" onClick={() => setView('create')}>
           + New Report
         </button>
@@ -2725,16 +2795,15 @@ function SupplierReports({ token, user }) {
                 <th>Date</th>
                 <th>Supplier</th>
                 <th>Total Supplied</th>
-                <th>Good</th>
-                <th>Faulty</th>
-                <th>Success Rate</th>
+                <th>Good Units</th>
+                <th>Faulty Units</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {reports.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="empty-state">
+                  <td colSpan="6" className="empty-state">
                     No supplier reports yet. Click "New Report" to create one.
                   </td>
                 </tr>
@@ -2742,15 +2811,10 @@ function SupplierReports({ token, user }) {
                 reports.map(report => (
                   <tr key={report.id}>
                     <td>{new Date(report.created_at).toLocaleDateString()}</td>
-                    <td className="supplier-name">{report.supplier_name}</td>
+                    <td>{report.supplier_name}</td>
                     <td>{report.total_supplied}</td>
-                    <td className="good-count">{report.good_units}</td>
-                    <td className="faulty-count">{report.total_faulty}</td>
-                    <td>
-                      <span className={`success-rate ${(report.good_units / report.total_supplied) >= 0.9 ? 'good' : 'bad'}`}>
-                        {((report.good_units / report.total_supplied) * 100).toFixed(1)}%
-                      </span>
-                    </td>
+                    <td className="good">{report.good_units}</td>
+                    <td className="bad">{report.total_faulty}</td>
                     <td>
                       <button 
                         className="btn small primary"
@@ -2769,346 +2833,22 @@ function SupplierReports({ token, user }) {
     </div>
   );
 }
+
 // =============================================================================
 // SETTINGS COMPONENT (Admin Only)
 // =============================================================================
 function Settings({ token, user }) {
-  const [activeSection, setActiveSection] = useState('branches');
-
-  return (
-    <div className="settings">
-      <h2>Settings</h2>
-
-      <div className="settings-tabs">
-        <button 
-          className={`tab ${activeSection === 'branches' ? 'active' : ''}`}
-          onClick={() => setActiveSection('branches')}
-        >
-          Branches
-        </button>
-        <button 
-          className={`tab ${activeSection === 'suppliers' ? 'active' : ''}`}
-          onClick={() => setActiveSection('suppliers')}
-        >
-          Suppliers
-        </button>
-        <button 
-          className={`tab ${activeSection === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveSection('users')}
-        >
-          Users
-        </button>
-      </div>
-
-      <div className="settings-content">
-        {activeSection === 'branches' && <BranchesSettings token={token} />}
-        {activeSection === 'suppliers' && <SuppliersSettings token={token} />}
-        {activeSection === 'users' && <UsersSettings token={token} user={user} />}
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// BRANCHES SETTINGS COMPONENT
-// =============================================================================
-function BranchesSettings({ token }) {
-  const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', location: '' });
-  const [formMessage, setFormMessage] = useState('');
-
-  useEffect(() => {
-    loadBranches();
-  }, []);
-
-  const loadBranches = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/branches`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setBranches(data.branches || []);
-    } catch (err) {
-      console.error('Error loading branches:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormMessage('');
-
-    try {
-      const res = await fetch(`${API_BASE}/branch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create branch');
-      }
-
-      setFormMessage('✓ Branch created successfully!');
-      setFormData({ name: '', location: '' });
-      loadBranches();
-
-    } catch (err) {
-      setFormMessage(`✗ Error: ${err.message}`);
-    }
-  };
-
-  return (
-    <div className="settings-section">
-      <div className="section-header">
-        <h3>Branches</h3>
-        <button className="btn primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ Add Branch'}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="form-container compact">
-          {formMessage && (
-            <div className={formMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
-              {formMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Branch Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="e.g., Ikeja Branch"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Location *</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  placeholder="e.g., 123 Main Street, Lagos"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn primary">
-                Add Branch
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="loading">Loading branches...</div>
-      ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Branch Name</th>
-                <th>Location</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {branches.length === 0 ? (
-                <tr>
-                  <td colSpan="3" className="empty-state">No branches yet.</td>
-                </tr>
-              ) : (
-                branches.map(branch => (
-                  <tr key={branch.id}>
-                    <td className="branch-name">{branch.name}</td>
-                    <td>{branch.location}</td>
-                    <td>{new Date(branch.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// SUPPLIERS SETTINGS COMPONENT
-// =============================================================================
-function SuppliersSettings({ token }) {
-  const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', contact_info: '' });
-  const [formMessage, setFormMessage] = useState('');
-
-  useEffect(() => {
-    loadSuppliers();
-  }, []);
-
-  const loadSuppliers = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/suppliers`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setSuppliers(data.suppliers || []);
-    } catch (err) {
-      console.error('Error loading suppliers:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormMessage('');
-
-    try {
-      const res = await fetch(`${API_BASE}/supplier`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create supplier');
-      }
-
-      setFormMessage('✓ Supplier created successfully!');
-      setFormData({ name: '', contact_info: '' });
-      loadSuppliers();
-
-    } catch (err) {
-      setFormMessage(`✗ Error: ${err.message}`);
-    }
-  };
-
-  return (
-    <div className="settings-section">
-      <div className="section-header">
-        <h3>Suppliers</h3>
-        <button className="btn primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ Add Supplier'}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="form-container compact">
-          {formMessage && (
-            <div className={formMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
-              {formMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Supplier Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="e.g., Dell Nigeria"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Contact Info *</label>
-                <input
-                  type="text"
-                  value={formData.contact_info}
-                  onChange={(e) => setFormData({...formData, contact_info: e.target.value})}
-                  placeholder="e.g., 08012345678, email@example.com"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn primary">
-                Add Supplier
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="loading">Loading suppliers...</div>
-      ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Supplier Name</th>
-                <th>Contact Info</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {suppliers.length === 0 ? (
-                <tr>
-                  <td colSpan="3" className="empty-state">No suppliers yet.</td>
-                </tr>
-              ) : (
-                suppliers.map(supplier => (
-                  <tr key={supplier.id}>
-                    <td className="supplier-name">{supplier.name}</td>
-                    <td>{supplier.contact_info}</td>
-                    <td>{new Date(supplier.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// USERS SETTINGS COMPONENT
-// =============================================================================
-function UsersSettings({ token, user }) {
+  const [view, setView] = useState('menu');
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'sales',
-    branch_name: ''
-  });
-  const [formMessage, setFormMessage] = useState('');
-  const [deleteLoading, setDeleteLoading] = useState(null);
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadUsers();
-    loadBranches();
-  }, []);
+  // Form states
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'sales', branch_name: '' });
+  const [newBranch, setNewBranch] = useState({ name: '', location: '' });
+  const [newSupplier, setNewSupplier] = useState({ name: '', contact_info: '' });
+  const [message, setMessage] = useState('');
 
   const loadUsers = async () => {
     setLoading(true);
@@ -3126,6 +2866,7 @@ function UsersSettings({ token, user }) {
   };
 
   const loadBranches = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/branches`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -3134,12 +2875,29 @@ function UsersSettings({ token, user }) {
       setBranches(data.branches || []);
     } catch (err) {
       console.error('Error loading branches:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const loadSuppliers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/suppliers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setSuppliers(data.suppliers || []);
+    } catch (err) {
+      console.error('Error loading suppliers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
     e.preventDefault();
-    setFormMessage('');
+    setMessage('');
 
     try {
       const res = await fetch(`${API_BASE}/register`, {
@@ -3148,7 +2906,7 @@ function UsersSettings({ token, user }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(newUser)
       });
 
       const data = await res.json();
@@ -3157,27 +2915,19 @@ function UsersSettings({ token, user }) {
         throw new Error(data.error || 'Failed to create user');
       }
 
-      setFormMessage('✓ User created successfully!');
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        role: 'sales',
-        branch_name: ''
-      });
+      setMessage(`✓ User "${newUser.name}" created successfully!`);
+      setNewUser({ name: '', email: '', password: '', role: 'sales', branch_name: '' });
       loadUsers();
 
     } catch (err) {
-      setFormMessage(`✗ Error: ${err.message}`);
+      setMessage(`✗ Error: ${err.message}`);
     }
   };
 
   const handleDeleteUser = async (userId, userName) => {
-    if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+    if (!window.confirm(`Are you sure you want to delete user "${userName}"?`)) {
       return;
     }
-
-    setDeleteLoading(userId);
 
     try {
       const res = await fetch(`${API_BASE}/users/${userId}`, {
@@ -3191,52 +2941,115 @@ function UsersSettings({ token, user }) {
         throw new Error(data.error || 'Failed to delete user');
       }
 
-      alert('User deleted successfully!');
+      alert(`✓ User deleted successfully`);
       loadUsers();
 
     } catch (err) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      setDeleteLoading(null);
+      alert(`✗ Error: ${err.message}`);
     }
   };
 
-  return (
-    <div className="settings-section">
-      <div className="section-header">
-        <h3>Users</h3>
-        <button className="btn primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ Add User'}
-        </button>
-      </div>
+  const handleCreateBranch = async (e) => {
+    e.preventDefault();
+    setMessage('');
 
-      {showForm && (
-        <div className="form-container compact">
-          {formMessage && (
-            <div className={formMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
-              {formMessage}
+    try {
+      const res = await fetch(`${API_BASE}/branch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newBranch)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create branch');
+      }
+
+      setMessage(`✓ Branch "${newBranch.name}" created successfully!`);
+      setNewBranch({ name: '', location: '' });
+      loadBranches();
+
+    } catch (err) {
+      setMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  const handleCreateSupplier = async (e) => {
+    e.preventDefault();
+    setMessage('');
+
+    try {
+      const res = await fetch(`${API_BASE}/supplier`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newSupplier)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create supplier');
+      }
+
+      setMessage(`✓ Supplier "${newSupplier.name}" created successfully!`);
+      setNewSupplier({ name: '', contact_info: '' });
+      loadSuppliers();
+
+    } catch (err) {
+      setMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  // Users Management View
+  if (view === 'users') {
+    if (users.length === 0 && !loading) loadUsers();
+    if (branches.length === 0) loadBranches();
+
+    return (
+      <div className="settings">
+        <div className="page-header">
+          <h2>User Management</h2>
+          <button className="btn secondary" onClick={() => setView('menu')}>
+            ← Back
+          </button>
+        </div>
+
+        <div className="form-container">
+          <h3>Add New User</h3>
+          
+          {message && (
+            <div className={message.startsWith('✓') ? 'success-message' : 'error-message'}>
+              {message}
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleCreateUser}>
             <div className="form-row">
               <div className="form-group">
-                <label>Full Name *</label>
+                <label>Name *</label>
                 <input
                   type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  placeholder="e.g., John Doe"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                  placeholder="Enter full name"
                   required
                 />
               </div>
+
               <div className="form-group">
                 <label>Email *</label>
                 <input
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  placeholder="e.g., john@jimas.com"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  placeholder="Enter email address"
                   required
                 />
               </div>
@@ -3247,17 +3060,18 @@ function UsersSettings({ token, user }) {
                 <label>Password *</label>
                 <input
                   type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                   placeholder="Enter password"
                   required
                 />
               </div>
+
               <div className="form-group">
                 <label>Role *</label>
                 <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
                   required
                 >
                   <option value="sales">Sales</option>
@@ -3266,12 +3080,12 @@ function UsersSettings({ token, user }) {
               </div>
             </div>
 
-            {formData.role === 'sales' && (
+            {newUser.role === 'sales' && (
               <div className="form-group">
-                <label>Assigned Branch *</label>
+                <label>Branch *</label>
                 <select
-                  value={formData.branch_name}
-                  onChange={(e) => setFormData({...formData, branch_name: e.target.value})}
+                  value={newUser.branch_name}
+                  onChange={(e) => setNewUser({...newUser, branch_name: e.target.value})}
                   required
                 >
                   <option value="">Select Branch</option>
@@ -3287,65 +3101,253 @@ function UsersSettings({ token, user }) {
             </button>
           </form>
         </div>
-      )}
 
-      {loading ? (
-        <div className="loading">Loading users...</div>
-      ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Branch</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="empty-state">No users found.</td>
-                </tr>
-              ) : (
-                users.map(u => (
-                  <tr key={u.id}>
-                    <td className="user-name">{u.name}</td>
-                    <td>{u.email}</td>
-                    <td>
-                      <span className={`role-badge ${u.role}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td>{u.branch_name || 'All Branches'}</td>
-                    <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td>
-                      {u.email !== user.email ? (
-                        <button 
-                          className="btn small danger"
-                          onClick={() => handleDeleteUser(u.id, u.name)}
-                          disabled={deleteLoading === u.id}
-                        >
-                          {deleteLoading === u.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      ) : (
-                        <span className="current-user">You</span>
-                      )}
-                    </td>
+        <div className="section">
+          <h3>Existing Users</h3>
+          
+          {loading ? (
+            <div className="loading">Loading users...</div>
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Branch</th>
+                    <th>Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td>{u.name}</td>
+                      <td>{u.email}</td>
+                      <td>
+                        <span className={`role-badge ${u.role}`}>{u.role}</span>
+                      </td>
+                      <td>{u.branch_name || '-'}</td>
+                      <td>
+                        {u.id !== user.id && (
+                          <button 
+                            className="btn small danger"
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    );
+  }
+
+  // Branches Management View
+  if (view === 'branches') {
+    if (branches.length === 0 && !loading) loadBranches();
+
+    return (
+      <div className="settings">
+        <div className="page-header">
+          <h2>Branch Management</h2>
+          <button className="btn secondary" onClick={() => setView('menu')}>
+            ← Back
+          </button>
+        </div>
+
+        <div className="form-container">
+          <h3>Add New Branch</h3>
+          
+          {message && (
+            <div className={message.startsWith('✓') ? 'success-message' : 'error-message'}>
+              {message}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateBranch}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Branch Name *</label>
+                <input
+                  type="text"
+                  value={newBranch.name}
+                  onChange={(e) => setNewBranch({...newBranch, name: e.target.value})}
+                  placeholder="e.g., Computer Village"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Location *</label>
+                <input
+                  type="text"
+                  value={newBranch.location}
+                  onChange={(e) => setNewBranch({...newBranch, location: e.target.value})}
+                  placeholder="e.g., Lagos, Nigeria"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn primary">
+              Create Branch
+            </button>
+          </form>
+        </div>
+
+        <div className="section">
+          <h3>Existing Branches</h3>
+          
+          {loading ? (
+            <div className="loading">Loading branches...</div>
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Location</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branches.map(b => (
+                    <tr key={b.id}>
+                      <td>{b.name}</td>
+                      <td>{b.location}</td>
+                      <td>{new Date(b.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Suppliers Management View
+  if (view === 'suppliers') {
+    if (suppliers.length === 0 && !loading) loadSuppliers();
+
+    return (
+      <div className="settings">
+        <div className="page-header">
+          <h2>Supplier Management</h2>
+          <button className="btn secondary" onClick={() => setView('menu')}>
+            ← Back
+          </button>
+        </div>
+
+        <div className="form-container">
+          <h3>Add New Supplier</h3>
+          
+          {message && (
+            <div className={message.startsWith('✓') ? 'success-message' : 'error-message'}>
+              {message}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateSupplier}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Supplier Name *</label>
+                <input
+                  type="text"
+                  value={newSupplier.name}
+                  onChange={(e) => setNewSupplier({...newSupplier, name: e.target.value})}
+                  placeholder="e.g., Tech Suppliers Ltd"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Contact Info *</label>
+                <input
+                  type="text"
+                  value={newSupplier.contact_info}
+                  onChange={(e) => setNewSupplier({...newSupplier, contact_info: e.target.value})}
+                  placeholder="e.g., 08012345678"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn primary">
+              Add Supplier
+            </button>
+          </form>
+        </div>
+
+        <div className="section">
+          <h3>Existing Suppliers</h3>
+          
+          {loading ? (
+            <div className="loading">Loading suppliers...</div>
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Contact Info</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suppliers.map(s => (
+                    <tr key={s.id}>
+                      <td>{s.name}</td>
+                      <td>{s.contact_info}</td>
+                      <td>{new Date(s.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Settings Menu View
+  return (
+    <div className="settings">
+      <h2>Settings</h2>
+      
+      <div className="menu-grid">
+        <div className="menu-card" onClick={() => setView('users')}>
+          <div className="menu-icon">👤</div>
+          <h3>User Management</h3>
+          <p>Add, edit, or remove users</p>
+        </div>
+
+        <div className="menu-card" onClick={() => setView('branches')}>
+          <div className="menu-icon">🏢</div>
+          <h3>Branch Management</h3>
+          <p>Manage store branches</p>
+        </div>
+
+        <div className="menu-card" onClick={() => setView('suppliers')}>
+          <div className="menu-icon">📦</div>
+          <h3>Supplier Management</h3>
+          <p>Manage laptop suppliers</p>
+        </div>
+      </div>
     </div>
   );
 }
 
 // =============================================================================
-// EXPORT APP
+// EXPORT DEFAULT
 // =============================================================================
 export default App;
