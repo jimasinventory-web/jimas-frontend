@@ -2205,6 +2205,37 @@ function BulkResellers({ token, user }) {
               </div>
             </div>
 
+            {/* Admin: Recalculate Balance Section */}
+            {user?.role === 'admin' && (
+              <div className="section">
+                <h3>Balance Management (Admin)</h3>
+                <p style={{fontSize: '13px', color: '#666', marginBottom: '12px'}}>
+                  If the balance appears incorrect, click below to recalculate based on credit book items and payments.
+                </p>
+                <button 
+                  className="btn secondary"
+                  onClick={async () => {
+                    if (!window.confirm('Recalculate this reseller\'s balance based on their credit book and payments?')) return;
+                    try {
+                      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/recalculate-balance`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      alert(`Balance recalculated!\n\nPrevious: ₦${data.previous_balance.toLocaleString()}\nItems Total: ₦${data.items_total.toLocaleString()}\nPayments: ₦${data.payments_total.toLocaleString()}\nCorrect Balance: ₦${data.correct_balance.toLocaleString()}`);
+                      loadCreditBook(selectedReseller.id);
+                      loadResellers();
+                    } catch (err) {
+                      alert('Error: ' + err.message);
+                    }
+                  }}
+                >
+                  🔄 Recalculate Balance
+                </button>
+              </div>
+            )}
+
             {/* Payment Section */}
             <div className="section">
               <h3>Record Payment</h3>
