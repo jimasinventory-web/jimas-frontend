@@ -1588,6 +1588,37 @@ function CreditCustomers({ token, user }) {
               </div>
             </div>
 
+            {/* Admin: Recalculate Balance Section */}
+            {user?.role === 'admin' && (
+              <div className="section">
+                <h3>Balance Management (Admin)</h3>
+                <p style={{fontSize: '13px', color: '#666', marginBottom: '12px'}}>
+                  If the balance appears incorrect, click below to recalculate based on unsettled sales.
+                </p>
+                <button 
+                  className="btn secondary"
+                  onClick={async () => {
+                    if (!window.confirm('Recalculate this customer\'s balance based on their unsettled sales?')) return;
+                    try {
+                      const res = await fetch(`${API_BASE}/credit-customers/${selectedCustomer.contact_info}/recalculate-balance`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      alert(`Balance recalculated!\n\nPrevious: ₦${data.previous_balance.toLocaleString()}\nCorrect Balance: ₦${data.correct_balance.toLocaleString()}\nDifference: ₦${data.difference.toLocaleString()}`);
+                      loadCustomerDebts(selectedCustomer.contact_info);
+                      loadCustomers();
+                    } catch (err) {
+                      alert('Error: ' + err.message);
+                    }
+                  }}
+                >
+                  🔄 Recalculate Balance
+                </button>
+              </div>
+            )}
+
             <div className="section">
               <h3>Record Payment</h3>
               
