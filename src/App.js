@@ -804,6 +804,12 @@ function Sales({ token, user }) {
   const [view, setView] = useState('menu');
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // Credit customers for searchable dropdown
+  const [creditCustomers, setCreditCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedExistingCustomer, setSelectedExistingCustomer] = useState(null);
 
   // New Sale State - UPDATED WITH SALES_NOTE
   const [saleData, setSaleData] = useState({
@@ -830,6 +836,7 @@ function Sales({ token, user }) {
 
   useEffect(() => {
     loadBranches();
+    loadCreditCustomers();
   }, []);
 
   const loadBranches = async () => {
@@ -842,6 +849,45 @@ function Sales({ token, user }) {
     } catch (err) {
       console.error('Error loading branches:', err);
     }
+  };
+
+  const loadCreditCustomers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/credit-customers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setCreditCustomers(data.customers || []);
+    } catch (err) {
+      console.error('Error loading credit customers:', err);
+    }
+  };
+
+  const filteredCustomers = creditCustomers.filter(c => 
+    c.customer_type !== 'bulk_reseller' && (
+      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+      c.contact_info.includes(customerSearch)
+    )
+  );
+
+  const selectExistingCustomer = (customer) => {
+    setSelectedExistingCustomer(customer);
+    setSaleData({
+      ...saleData,
+      customer_name: customer.name,
+      customer_phone: customer.contact_info
+    });
+    setCustomerSearch('');
+    setShowCustomerDropdown(false);
+  };
+
+  const clearSelectedCustomer = () => {
+    setSelectedExistingCustomer(null);
+    setSaleData({
+      ...saleData,
+      customer_name: '',
+      customer_phone: ''
+    });
   };
 
   const addItem = () => {
@@ -980,6 +1026,8 @@ function Sales({ token, user }) {
     });
     setSaleSuccess(null);
     setSaleError('');
+    setSelectedExistingCustomer(null);
+    setCustomerSearch('');
   };
 
   const printReceipt = (saleId) => {
@@ -1079,29 +1127,87 @@ function Sales({ token, user }) {
                 </div>
               </div>
 
-              <div className="form-row">
+              {saleData.payment_type === 'credit' && !selectedExistingCustomer && (
                 <div className="form-group">
-                  <label>Customer Name *</label>
-                  <input
-                    type="text"
-                    value={saleData.customer_name}
-                    onChange={(e) => setSaleData({...saleData, customer_name: e.target.value})}
-                    placeholder="Enter customer name"
-                    required
-                  />
+                  <label>Search Existing Credit Customer (Optional)</label>
+                  <div className="customer-search-container">
+                    <input
+                      type="text"
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                        setShowCustomerDropdown(true);
+                      }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      placeholder="Type to search existing customers by name or phone..."
+                    />
+                    {showCustomerDropdown && customerSearch && (
+                      <div className="customer-dropdown">
+                        {filteredCustomers.length === 0 ? (
+                          <div className="dropdown-item no-results">
+                            No existing customers found. Enter details below for new customer.
+                          </div>
+                        ) : (
+                          filteredCustomers.slice(0, 10).map(customer => (
+                            <div 
+                              key={customer.id} 
+                              className="dropdown-item"
+                              onClick={() => selectExistingCustomer(customer)}
+                            >
+                              <span className="customer-name">{customer.name}</span>
+                              <span className="customer-phone">{customer.contact_info}</span>
+                              <span className="customer-balance">
+                                Balance: ₦{parseFloat(customer.open_balance || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                <div className="form-group">
-                  <label>Customer Phone *</label>
-                  <input
-                    type="text"
-                    value={saleData.customer_phone}
-                    onChange={(e) => setSaleData({...saleData, customer_phone: e.target.value})}
-                    placeholder="e.g., 08012345678"
-                    required
-                  />
+              {selectedExistingCustomer && saleData.payment_type === 'credit' && (
+                <div className="selected-customer-card">
+                  <div className="selected-customer-info">
+                    <strong>{selectedExistingCustomer.name}</strong>
+                    <span>{selectedExistingCustomer.contact_info}</span>
+                    <span className="existing-balance">
+                      Current Balance: ₦{parseFloat(selectedExistingCustomer.open_balance || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <button type="button" className="btn small secondary" onClick={clearSelectedCustomer}>
+                    Change Customer
+                  </button>
                 </div>
-              </div>
+              )}
+
+              {(!selectedExistingCustomer || saleData.payment_type === 'cash') && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Customer Name *</label>
+                    <input
+                      type="text"
+                      value={saleData.customer_name}
+                      onChange={(e) => setSaleData({...saleData, customer_name: e.target.value})}
+                      placeholder="Enter customer name"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Customer Phone *</label>
+                    <input
+                      type="text"
+                      value={saleData.customer_phone}
+                      onChange={(e) => setSaleData({...saleData, customer_phone: e.target.value})}
+                      placeholder="e.g., 08012345678"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="form-row">
                 <div className="form-group checkbox-group">
@@ -2496,9 +2602,27 @@ function SupplierReports({ token, user }) {
     supplier_name: '',
     total_supplied: '',
     good_units: '',
-    faults: [{ description: '', count: '' }],
+    faults: [{ type: '', description: '', count: '' }],
     notes: ''
   });
+
+  // Predefined fault options
+  const faultOptions = [
+    'Screen Issue',
+    'Keyboard Issue', 
+    'Battery Issue',
+    'Charging Port Issue',
+    'Motherboard Issue',
+    'RAM Issue',
+    'Storage Issue',
+    'Hinge Issue',
+    'Speaker Issue',
+    'Camera Issue',
+    'WiFi/Bluetooth Issue',
+    'Physical Damage',
+    'Other'
+  ];
+
   const [createMessage, setCreateMessage] = useState('');
 
   useEffect(() => {
@@ -2536,7 +2660,7 @@ function SupplierReports({ token, user }) {
   const addFault = () => {
     setNewReport({
       ...newReport,
-      faults: [...newReport.faults, { description: '', count: '' }]
+      faults: [...newReport.faults, { type: '', description: '', count: '' }]
     });
   };
 
@@ -2549,6 +2673,10 @@ function SupplierReports({ token, user }) {
   const updateFault = (index, field, value) => {
     const newFaults = [...newReport.faults];
     newFaults[index][field] = value;
+    // Clear description if type is not 'Other'
+    if (field === 'type' && value !== 'Other') {
+      newFaults[index].description = value;
+    }
     setNewReport({ ...newReport, faults: newFaults });
   };
 
@@ -2568,7 +2696,7 @@ function SupplierReports({ token, user }) {
           total_supplied: parseInt(newReport.total_supplied),
           good_units: parseInt(newReport.good_units),
           faults: newReport.faults.map(f => ({
-            description: f.description,
+            description: f.type === 'Other' ? f.description : f.type,
             count: parseInt(f.count) || 0
           }))
         })
@@ -2661,21 +2789,40 @@ function SupplierReports({ token, user }) {
               </div>
 
               {newReport.faults.map((fault, index) => (
-                <div key={index} className="item-row">
+                <div key={index} className="fault-row">
                   <div className="form-group">
-                    <input
-                      type="text"
-                      value={fault.description}
-                      onChange={(e) => updateFault(index, 'description', e.target.value)}
-                      placeholder="Fault description (e.g., Screen issue)"
-                    />
+                    <label>Fault Type</label>
+                    <select
+                      value={fault.type}
+                      onChange={(e) => updateFault(index, 'type', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Fault Type</option>
+                      {faultOptions.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
+                  {fault.type === 'Other' && (
+                    <div className="form-group">
+                      <label>Describe Fault</label>
+                      <input
+                        type="text"
+                        value={fault.description}
+                        onChange={(e) => updateFault(index, 'description', e.target.value)}
+                        placeholder="Describe the fault"
+                        required
+                      />
+                    </div>
+                  )}
                   <div className="form-group">
+                    <label>Count</label>
                     <input
                       type="number"
                       value={fault.count}
                       onChange={(e) => updateFault(index, 'count', e.target.value)}
-                      placeholder="Count"
+                      placeholder="Number of units"
+                      required
                     />
                   </div>
                   {newReport.faults.length > 1 && (
