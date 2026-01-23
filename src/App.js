@@ -120,7 +120,7 @@ function Navbar({ user, activeTab, setActiveTab, onLogout }) {
           </div>
         </div>
 
-        <div className="navbar-user desktop-only">
+        <div className="navbar-user">
           <span className="user-info">
             {user?.name} ({user?.role})
           </span>

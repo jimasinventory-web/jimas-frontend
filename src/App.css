@@ -141,6 +141,10 @@ body {
   gap: 16px;
 }
 
+.mobile-user-section {
+  display: none;
+}
+
 .user-info {
   font-size: 13px;
   color: var(--gray-600);
@@ -1437,7 +1441,7 @@ td.bad {
   cursor: pointer;
 }
 
-.desktop-only {
+.navbar-user {
   display: none;
 }
 
