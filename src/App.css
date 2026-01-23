@@ -1565,3 +1565,140 @@ td.bad {
     flex-direction: column;
   }
 }
+
+/* =============================================================================
+   NEW STYLES FOR PAYMENT STATUS, PAYMENT HISTORY, BRANCH FILTER
+   ============================================================================= */
+
+/* Payment Status Badges */
+.status-badge.unpaid {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.status-badge.partially_paid {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.status-badge.fully_paid {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.partial-amount {
+  display: block;
+  font-size: 11px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+
+.status-select {
+  padding: 6px 10px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: 12px;
+  background: var(--white);
+  cursor: pointer;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Profit Info in Reseller Card */
+.profit-info {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
+  font-size: 14px;
+  color: var(--gray-600);
+}
+
+.profit-info .profit-amount {
+  font-weight: 700;
+  color: var(--success);
+  margin-left: 8px;
+}
+
+.profit-info .paid-count {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-left: 8px;
+}
+
+/* Branch Filter */
+.branch-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.branch-filter select {
+  padding: 8px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: 14px;
+  background: var(--white);
+  min-width: 150px;
+}
+
+.branch-tag {
+  font-size: 12px;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* Payment History Table */
+.section .table-container {
+  margin-top: 16px;
+}
+
+/* Manual Balance Form */
+.section form .form-row {
+  margin-bottom: 16px;
+}
+
+/* Assign Branch Section */
+.assign-branch-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
+}
+
+.assign-branch-section label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.assign-branch-section select {
+  padding: 8px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: 14px;
+  background: var(--white);
+  min-width: 180px;
+}
+
+.branch-tag.unassigned {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.not-assigned-badge {
+  background: var(--warning-light);
+  color: var(--warning);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}

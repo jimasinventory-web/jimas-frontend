@@ -746,17 +746,15 @@ function Inventory({ token, user }) {
     <div className="inventory">
       <div className="page-header">
         <h2>Inventory</h2>
-        <div className="header-actions">
+       <div className="header-actions">
           {user?.role === 'admin' && (
-            <>
-              <button className="btn primary" onClick={() => setShowAddForm(true)}>
-                + Add Stock
-              </button>
-              <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
-                ↔ Transfer Stock
-              </button>
-            </>
+            <button className="btn primary" onClick={() => setShowAddForm(true)}>
+              + Add Stock
+            </button>
           )}
+          <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
+            ↔ Transfer Stock
+          </button>
         </div>
       </div>
 
@@ -1459,7 +1457,7 @@ function Sales({ token, user }) {
 }
 
 // =============================================================================
-// CREDIT CUSTOMERS COMPONENT - UPDATED WITH SPECIFICATIONS
+// CREDIT CUSTOMERS COMPONENT - UPDATED WITH PAYMENT HISTORY, MANUAL BALANCE, BRANCH FILTER
 // =============================================================================
 function CreditCustomers({ token, user }) {
   const [customers, setCustomers] = useState([]);
@@ -1467,6 +1465,9 @@ function CreditCustomers({ token, user }) {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerDebts, setCustomerDebts] = useState(null);
   const [view, setView] = useState('list');
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [paymentHistory, setPaymentHistory] = useState([]);
 
   // Payment Form State
   const [paymentData, setPaymentData] = useState({
@@ -1479,14 +1480,43 @@ function CreditCustomers({ token, user }) {
   // Selected Sale Details for showing specs
   const [selectedSaleDetails, setSelectedSaleDetails] = useState(null);
 
+  // Manual Balance Edit State (Admin Only)
+  const [manualBalance, setManualBalance] = useState('');
+  const [manualBalanceReason, setManualBalanceReason] = useState('');
+  const [manualBalanceMessage, setManualBalanceMessage] = useState('');
+
   useEffect(() => {
     loadCustomers();
+    if (user?.role === 'admin') {
+      loadBranches();
+    }
   }, []);
+
+  useEffect(() => {
+    loadCustomers();
+  }, [selectedBranch]);
+
+  const loadBranches = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/branches`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setBranches(data.branches || []);
+    } catch (err) {
+      console.error('Error loading branches:', err);
+    }
+  };
 
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/credit-customers`, {
+      let url = `${API_BASE}/credit-customers`;
+      if (selectedBranch) {
+        url += `?branch_name=${encodeURIComponent(selectedBranch)}`;
+      }
+      
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -1503,12 +1533,19 @@ function CreditCustomers({ token, user }) {
   const loadCustomerDebts = async (phone) => {
     setLoading(true);
     try {
+      // Load branches if admin and not already loaded
+      if (user?.role === 'admin' && branches.length === 0) {
+        await loadBranches();
+      }
+      
       const res = await fetch(`${API_BASE}/credit-customers/${phone}/debts`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       setCustomerDebts(data);
       setSelectedCustomer(data.customer);
+      setManualBalance(data.customer?.open_balance || '0');
+      loadPaymentHistory(phone);
       setView('details');
     } catch (err) {
       console.error('Error loading debts:', err);
@@ -1517,7 +1554,19 @@ function CreditCustomers({ token, user }) {
     }
   };
 
-  // NEW: Handle sale selection to show specs
+  const loadPaymentHistory = async (phone) => {
+    try {
+      const res = await fetch(`${API_BASE}/credit-customers/${phone}/payments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPaymentHistory(data.payments || []);
+    } catch (err) {
+      console.error('Error loading payment history:', err);
+    }
+  };
+
+  // Handle sale selection to show specs
   const handleSaleSelection = (saleId) => {
     setPaymentData({...paymentData, sale_id: saleId});
     
@@ -1571,13 +1620,77 @@ function CreditCustomers({ token, user }) {
     }
   };
 
-  // Customer Details View - UPDATED WITH SPECIFICATIONS
+  const handleManualBalanceUpdate = async (e) => {
+    e.preventDefault();
+    setManualBalanceMessage('');
+
+    if (!window.confirm(`Are you sure you want to manually set the balance to ₦${parseFloat(manualBalance).toLocaleString()}?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/credit-customers/${selectedCustomer.contact_info}/manual-balance`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          new_balance: parseFloat(manualBalance),
+          reason: manualBalanceReason 
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update balance');
+      }
+
+      setManualBalanceMessage(`✓ Balance updated from ₦${data.previous_balance.toLocaleString()} to ₦${data.new_balance.toLocaleString()}`);
+      setManualBalanceReason('');
+      loadCustomerDebts(selectedCustomer.contact_info);
+      loadCustomers();
+
+    } catch (err) {
+      setManualBalanceMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId) => {
+    if (!window.confirm('Are you sure you want to delete this payment? The amount will be added back to the balance owed.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/credit-customers/${selectedCustomer.contact_info}/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete payment');
+      }
+
+      alert(`✓ Payment deleted. ₦${data.amount_restored.toLocaleString()} added back to balance.`);
+      loadCustomerDebts(selectedCustomer.contact_info);
+      loadPaymentHistory(selectedCustomer.contact_info);
+      loadCustomers();
+
+    } catch (err) {
+      alert(`✗ Error: ${err.message}`);
+    }
+  };
+
+  // Customer Details View
   if (view === 'details' && selectedCustomer) {
     return (
       <div className="credit-customers">
         <div className="page-header">
           <h2>Customer Details</h2>
-          <button className="btn secondary" onClick={() => { setView('list'); setSelectedCustomer(null); setCustomerDebts(null); setSelectedSaleDetails(null); }}>
+          <button className="btn secondary" onClick={() => { setView('list'); setSelectedCustomer(null); setCustomerDebts(null); setSelectedSaleDetails(null); setPaymentHistory([]); }}>
             ← Back to Customers
           </button>
         </div>
@@ -1591,42 +1704,100 @@ function CreditCustomers({ token, user }) {
                 <div>
                   <h3>{selectedCustomer.name}</h3>
                   <p>{selectedCustomer.contact_info}</p>
+                  {selectedCustomer.branch_name ? (
+                    <p className="branch-tag">Branch: {selectedCustomer.branch_name}</p>
+                  ) : (
+                    <p className="branch-tag unassigned">Branch: Not Assigned</p>
+                  )}
                 </div>
                 <div className="customer-balance">
                   <span className="balance-label">Total Owed</span>
                   <span className="balance-amount">₦{parseFloat(selectedCustomer.open_balance || 0).toLocaleString()}</span>
                 </div>
               </div>
+              
+              {/* Admin: Assign Branch */}
+              {user?.role === 'admin' && (
+                <div className="assign-branch-section">
+                  <label>Assign to Branch:</label>
+                  <select
+                    value={selectedCustomer.branch_name || ''}
+                    onChange={async (e) => {
+                      const branchName = e.target.value;
+                      if (!branchName) return;
+                      
+                      if (!window.confirm(`Assign ${selectedCustomer.name} to ${branchName}?`)) return;
+                      
+                      try {
+                        const res = await fetch(`${API_BASE}/credit-customers/${selectedCustomer.contact_info}/assign-branch`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ branch_name: branchName })
+                        });
+                        
+                        const data = await res.json();
+                        
+                        if (!res.ok) {
+                          throw new Error(data.error || 'Failed to assign branch');
+                        }
+                        
+                        alert(`✓ ${data.message}`);
+                        loadCustomerDebts(selectedCustomer.contact_info);
+                        loadCustomers();
+                      } catch (err) {
+                        alert(`✗ Error: ${err.message}`);
+                      }
+                    }}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
-            {/* Admin: Recalculate Balance Section */}
+            {/* Admin: Manual Balance Edit Section */}
             {user?.role === 'admin' && (
               <div className="section">
-                <h3>Balance Management (Admin)</h3>
-                <p style={{fontSize: '13px', color: '#666', marginBottom: '12px'}}>
-                  If the balance appears incorrect, click below to recalculate based on unsettled sales.
-                </p>
-                <button 
-                  className="btn secondary"
-                  onClick={async () => {
-                    if (!window.confirm('Recalculate this customer\'s balance based on their unsettled sales?')) return;
-                    try {
-                      const res = await fetch(`${API_BASE}/credit-customers/${selectedCustomer.contact_info}/recalculate-balance`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                      });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-                      alert(`Balance recalculated!\n\nPrevious: ₦${data.previous_balance.toLocaleString()}\nCorrect Balance: ₦${data.correct_balance.toLocaleString()}\nDifference: ₦${data.difference.toLocaleString()}`);
-                      loadCustomerDebts(selectedCustomer.contact_info);
-                      loadCustomers();
-                    } catch (err) {
-                      alert('Error: ' + err.message);
-                    }
-                  }}
-                >
-                  🔄 Recalculate Balance
-                </button>
+                <h3>Manual Balance Edit (Admin)</h3>
+                
+                {manualBalanceMessage && (
+                  <div className={manualBalanceMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+                    {manualBalanceMessage}
+                  </div>
+                )}
+
+                <form onSubmit={handleManualBalanceUpdate}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>New Balance (₦)</label>
+                      <input
+                        type="number"
+                        value={manualBalance}
+                        onChange={(e) => setManualBalance(e.target.value)}
+                        placeholder="Enter new balance"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Reason (Optional)</label>
+                      <input
+                        type="text"
+                        value={manualBalanceReason}
+                        onChange={(e) => setManualBalanceReason(e.target.value)}
+                        placeholder="e.g., Correction for miscalculation"
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn primary">
+                    Update Balance
+                  </button>
+                </form>
               </div>
             )}
 
@@ -1656,7 +1827,7 @@ function CreditCustomers({ token, user }) {
                   </select>
                 </div>
 
-                {/* NEW: Show selected sale details with specs */}
+                {/* Show selected sale details with specs */}
                 {selectedSaleDetails && (
                   <div className="selected-sale-details">
                     <h4>Sale #{selectedSaleDetails.sale_id} Items:</h4>
@@ -1693,6 +1864,49 @@ function CreditCustomers({ token, user }) {
                   {paymentLoading ? 'Processing...' : 'Record Payment'}
                 </button>
               </form>
+            </div>
+
+            {/* Payment History Section */}
+            <div className="section">
+              <h3>Payment History ({paymentHistory.length})</h3>
+              
+              {paymentHistory.length === 0 ? (
+                <div className="empty-state">No payments recorded yet.</div>
+              ) : (
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Payment ID</th>
+                        <th>Sale ID</th>
+                        <th>Amount</th>
+                        {user?.role === 'admin' && <th>Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentHistory.map(payment => (
+                        <tr key={payment.id}>
+                          <td>{new Date(payment.created_at).toLocaleDateString()}</td>
+                          <td>#{payment.id}</td>
+                          <td>#{payment.sale_id}</td>
+                          <td className="profit">₦{parseFloat(payment.amount).toLocaleString()}</td>
+                          {user?.role === 'admin' && (
+                            <td>
+                              <button 
+                                className="btn small danger"
+                                onClick={() => handleDeletePayment(payment.id)}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="section">
@@ -1761,6 +1975,19 @@ function CreditCustomers({ token, user }) {
     <div className="credit-customers">
       <div className="page-header">
         <h2>Credit Customers</h2>
+        {user?.role === 'admin' && branches.length > 0 && (
+          <div className="branch-filter">
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+            >
+              <option value="">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.name}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -1772,6 +1999,7 @@ function CreditCustomers({ token, user }) {
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
+                {user?.role === 'admin' && <th>Branch</th>}
                 <th>Total Purchases</th>
                 <th>Open Balance</th>
                 <th>Actions</th>
@@ -1780,7 +2008,7 @@ function CreditCustomers({ token, user }) {
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="empty-state">
+                  <td colSpan={user?.role === 'admin' ? 6 : 5} className="empty-state">
                     No credit customers yet. Credit customers are created automatically when you make a credit sale.
                   </td>
                 </tr>
@@ -1789,6 +2017,15 @@ function CreditCustomers({ token, user }) {
                   <tr key={customer.id}>
                     <td className="customer-name">{customer.name}</td>
                     <td>{customer.contact_info}</td>
+                    {user?.role === 'admin' && (
+                      <td>
+                        {customer.branch_name ? (
+                          customer.branch_name
+                        ) : (
+                          <span className="not-assigned-badge">Not assigned</span>
+                        )}
+                      </td>
+                    )}
                     <td>₦{parseFloat(customer.total_purchases || 0).toLocaleString()}</td>
                     <td>
                       <span className={`balance ${parseFloat(customer.open_balance) > 0 ? 'owing' : 'clear'}`}>
@@ -1814,7 +2051,7 @@ function CreditCustomers({ token, user }) {
   );
 }
 // =============================================================================
-// BULK RESELLERS COMPONENT - UPDATED WITH DELETE AND RETURN FEATURES
+// BULK RESELLERS COMPONENT - UPDATED WITH PAYMENT STATUS, PAYMENT HISTORY
 // =============================================================================
 function BulkResellers({ token, user }) {
   const [resellers, setResellers] = useState([]);
@@ -1823,6 +2060,7 @@ function BulkResellers({ token, user }) {
   const [selectedReseller, setSelectedReseller] = useState(null);
   const [creditBook, setCreditBook] = useState(null);
   const [branches, setBranches] = useState([]);
+  const [paymentHistory, setPaymentHistory] = useState([]);
 
   // Create Reseller State (Admin Only)
   const [newReseller, setNewReseller] = useState({ name: '', contact_info: '' });
@@ -1835,7 +2073,7 @@ function BulkResellers({ token, user }) {
   });
   const [addLaptopsMessage, setAddLaptopsMessage] = useState('');
 
-  // Return Laptop State (NEW)
+  // Return Laptop State
   const [returnData, setReturnData] = useState({ serial_number: '' });
   const [returnMessage, setReturnMessage] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
@@ -1843,6 +2081,14 @@ function BulkResellers({ token, user }) {
   // Payment State
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
+
+  // Manual Balance Edit State (Admin Only)
+  const [manualBalance, setManualBalance] = useState('');
+  const [manualBalanceReason, setManualBalanceReason] = useState('');
+  const [manualBalanceMessage, setManualBalanceMessage] = useState('');
+
+  // Payment Status Update State
+  const [statusUpdateMessage, setStatusUpdateMessage] = useState('');
 
   useEffect(() => {
     loadResellers();
@@ -1885,11 +2131,25 @@ function BulkResellers({ token, user }) {
       const data = await res.json();
       setCreditBook(data);
       setSelectedReseller(data.reseller);
+      setManualBalance(data.reseller?.open_balance || '0');
+      loadPaymentHistory(resellerId);
       setView('details');
     } catch (err) {
       console.error('Error loading credit book:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPaymentHistory = async (resellerId) => {
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${resellerId}/payments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPaymentHistory(data.payments || []);
+    } catch (err) {
+      console.error('Error loading payment history:', err);
     }
   };
 
@@ -1922,7 +2182,6 @@ function BulkResellers({ token, user }) {
     }
   };
 
-  // NEW: Delete Reseller (Admin Only)
   const handleDeleteReseller = async (resellerId, resellerName) => {
     if (!window.confirm(`Are you sure you want to delete "${resellerName}"? This action cannot be undone.`)) {
       return;
@@ -2006,7 +2265,6 @@ function BulkResellers({ token, user }) {
     }
   };
 
-  // NEW: Return Laptop from Bulk Reseller
   const handleReturnLaptop = async (e) => {
     e.preventDefault();
     setReturnMessage('');
@@ -2074,6 +2332,100 @@ function BulkResellers({ token, user }) {
     }
   };
 
+  const handleManualBalanceUpdate = async (e) => {
+    e.preventDefault();
+    setManualBalanceMessage('');
+
+    if (!window.confirm(`Are you sure you want to manually set the balance to ₦${parseFloat(manualBalance).toLocaleString()}?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/manual-balance`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          new_balance: parseFloat(manualBalance),
+          reason: manualBalanceReason 
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update balance');
+      }
+
+      setManualBalanceMessage(`✓ Balance updated from ₦${data.previous_balance.toLocaleString()} to ₦${data.new_balance.toLocaleString()}`);
+      setManualBalanceReason('');
+      loadCreditBook(selectedReseller.id);
+      loadResellers();
+
+    } catch (err) {
+      setManualBalanceMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  const handlePaymentStatusUpdate = async (itemId, newStatus, partialAmount = 0) => {
+    setStatusUpdateMessage('');
+
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/items/${itemId}/payment-status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          payment_status: newStatus,
+          amount_paid: partialAmount
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update status');
+      }
+
+      setStatusUpdateMessage(`✓ ${data.serial_number} marked as ${newStatus.replace('_', ' ')}`);
+      loadCreditBook(selectedReseller.id);
+
+    } catch (err) {
+      setStatusUpdateMessage(`✗ Error: ${err.message}`);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId) => {
+    if (!window.confirm('Are you sure you want to delete this payment? The amount will be added back to the balance owed.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete payment');
+      }
+
+      alert(`✓ Payment deleted. ₦${data.amount_restored.toLocaleString()} added back to balance.`);
+      loadCreditBook(selectedReseller.id);
+      loadPaymentHistory(selectedReseller.id);
+      loadResellers();
+
+    } catch (err) {
+      alert(`✗ Error: ${err.message}`);
+    }
+  };
+
   // Create Reseller View (Admin Only)
   if (view === 'create' && user?.role === 'admin') {
     return (
@@ -2124,13 +2476,13 @@ function BulkResellers({ token, user }) {
     );
   }
 
-  // Reseller Details View - UPDATED WITH RETURN FEATURE
+  // Reseller Details View
   if (view === 'details' && selectedReseller) {
     return (
       <div className="bulk-resellers">
         <div className="page-header">
           <h2>{selectedReseller.name}</h2>
-          <button className="btn secondary" onClick={() => { setView('list'); setSelectedReseller(null); setCreditBook(null); }}>
+          <button className="btn secondary" onClick={() => { setView('list'); setSelectedReseller(null); setCreditBook(null); setPaymentHistory([]); }}>
             ← Back to Resellers
           </button>
         </div>
@@ -2150,6 +2502,13 @@ function BulkResellers({ token, user }) {
                   <span className="balance-amount">₦{parseFloat(selectedReseller.open_balance || 0).toLocaleString()}</span>
                 </div>
               </div>
+              {creditBook?.total_profit_from_paid !== undefined && (
+                <div className="profit-info">
+                  <span>Profit from Fully Paid Items: </span>
+                  <span className="profit-amount">₦{parseFloat(creditBook.total_profit_from_paid || 0).toLocaleString()}</span>
+                  <span className="paid-count">({creditBook.fully_paid_count || 0} items)</span>
+                </div>
+              )}
             </div>
 
             {/* Add Laptops Section */}
@@ -2216,7 +2575,7 @@ function BulkResellers({ token, user }) {
               </form>
             </div>
 
-            {/* NEW: Return Laptop Section */}
+            {/* Return Laptop Section */}
             <div className="section">
               <h3>Return Laptop from Credit Book</h3>
               
@@ -2240,41 +2599,45 @@ function BulkResellers({ token, user }) {
                   {returnLoading ? 'Returning...' : 'Return Laptop'}
                 </button>
               </form>
-              
-              <div className="form-tip">
-                <strong>💡 Note:</strong> Returning a laptop removes it from the credit book, 
-                restores it to inventory, and reduces the amount owed.
-              </div>
             </div>
 
-            {/* Admin: Recalculate Balance Section */}
+            {/* Admin: Manual Balance Edit Section */}
             {user?.role === 'admin' && (
               <div className="section">
-                <h3>Balance Management (Admin)</h3>
-                <p style={{fontSize: '13px', color: '#666', marginBottom: '12px'}}>
-                  If the balance appears incorrect, click below to recalculate based on credit book items and payments.
-                </p>
-                <button 
-                  className="btn secondary"
-                  onClick={async () => {
-                    if (!window.confirm('Recalculate this reseller\'s balance based on their credit book and payments?')) return;
-                    try {
-                      const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/recalculate-balance`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                      });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-                      alert(`Balance recalculated!\n\nPrevious: ₦${data.previous_balance.toLocaleString()}\nItems Total: ₦${data.items_total.toLocaleString()}\nPayments: ₦${data.payments_total.toLocaleString()}\nCorrect Balance: ₦${data.correct_balance.toLocaleString()}`);
-                      loadCreditBook(selectedReseller.id);
-                      loadResellers();
-                    } catch (err) {
-                      alert('Error: ' + err.message);
-                    }
-                  }}
-                >
-                  🔄 Recalculate Balance
-                </button>
+                <h3>Manual Balance Edit (Admin)</h3>
+                
+                {manualBalanceMessage && (
+                  <div className={manualBalanceMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+                    {manualBalanceMessage}
+                  </div>
+                )}
+
+                <form onSubmit={handleManualBalanceUpdate}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>New Balance (₦)</label>
+                      <input
+                        type="number"
+                        value={manualBalance}
+                        onChange={(e) => setManualBalance(e.target.value)}
+                        placeholder="Enter new balance"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Reason (Optional)</label>
+                      <input
+                        type="text"
+                        value={manualBalanceReason}
+                        onChange={(e) => setManualBalanceReason(e.target.value)}
+                        placeholder="e.g., Correction for miscalculation"
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn primary">
+                    Update Balance
+                  </button>
+                </form>
               </div>
             )}
 
@@ -2304,9 +2667,56 @@ function BulkResellers({ token, user }) {
               </form>
             </div>
 
+            {/* Payment History Section */}
+            <div className="section">
+              <h3>Payment History ({paymentHistory.length})</h3>
+              
+              {paymentHistory.length === 0 ? (
+                <div className="empty-state">No payments recorded yet.</div>
+              ) : (
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Payment ID</th>
+                        <th>Amount</th>
+                        {user?.role === 'admin' && <th>Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentHistory.map(payment => (
+                        <tr key={payment.id}>
+                          <td>{new Date(payment.created_at).toLocaleDateString()}</td>
+                          <td>#{payment.id}</td>
+                          <td className="profit">₦{parseFloat(payment.amount).toLocaleString()}</td>
+                          {user?.role === 'admin' && (
+                            <td>
+                              <button 
+                                className="btn small danger"
+                                onClick={() => handleDeletePayment(payment.id)}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {/* Credit Book Items */}
             <div className="section">
               <h3>Credit Book ({creditBook?.total_items || 0} items)</h3>
+              
+              {statusUpdateMessage && (
+                <div className={statusUpdateMessage.startsWith('✓') ? 'success-message' : 'error-message'}>
+                  {statusUpdateMessage}
+                </div>
+              )}
               
               {creditBook?.items?.length === 0 ? (
                 <div className="empty-state">No items in credit book.</div>
@@ -2317,9 +2727,10 @@ function BulkResellers({ token, user }) {
                       <tr>
                         <th>Product</th>
                         <th>Serial Number</th>
-                        <th>Specifications</th>
                         <th>Given Price</th>
+                        <th>Payment Status</th>
                         <th>Date Added</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2327,9 +2738,39 @@ function BulkResellers({ token, user }) {
                         <tr key={item.id}>
                           <td className="product-name">{item.product_name}</td>
                           <td className="serial-number">{item.serial_number}</td>
-                          <td>{item.specifications || '-'}</td>
                           <td>₦{parseFloat(item.given_price).toLocaleString()}</td>
+                          <td>
+                            <span className={`status-badge ${item.payment_status || 'unpaid'}`}>
+                              {(item.payment_status || 'unpaid').replace('_', ' ')}
+                            </span>
+                            {item.payment_status === 'partially_paid' && item.amount_paid > 0 && (
+                              <span className="partial-amount">
+                                (₦{parseFloat(item.amount_paid).toLocaleString()} paid)
+                              </span>
+                            )}
+                          </td>
                           <td>{new Date(item.created_at).toLocaleDateString()}</td>
+                          <td>
+                            <select
+                              value={item.payment_status || 'unpaid'}
+                              onChange={(e) => {
+                                const newStatus = e.target.value;
+                                if (newStatus === 'partially_paid') {
+                                  const amount = prompt('Enter amount paid:');
+                                  if (amount && !isNaN(amount)) {
+                                    handlePaymentStatusUpdate(item.id, newStatus, parseFloat(amount));
+                                  }
+                                } else {
+                                  handlePaymentStatusUpdate(item.id, newStatus);
+                                }
+                              }}
+                              className="status-select"
+                            >
+                              <option value="unpaid">Unpaid</option>
+                              <option value="partially_paid">Partially Paid</option>
+                              <option value="fully_paid">Fully Paid</option>
+                            </select>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2343,7 +2784,7 @@ function BulkResellers({ token, user }) {
     );
   }
 
-  // Resellers List View - UPDATED WITH DELETE BUTTON
+  // Resellers List View
   return (
     <div className="bulk-resellers">
       <div className="page-header">
