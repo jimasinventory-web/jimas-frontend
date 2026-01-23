@@ -108,9 +108,19 @@ function Navbar({ user, activeTab, setActiveTab, onLogout }) {
               <span className="nav-label">{item.label}</span>
             </button>
           ))}
+          
+          {/* Mobile: User info and Logout inside menu */}
+          <div className="mobile-user-section">
+            <span className="mobile-user-info">
+              {user?.name} ({user?.role})
+            </span>
+            <button className="logout-btn mobile-logout" onClick={onLogout}>
+              Logout
+            </button>
+          </div>
         </div>
 
-        <div className="navbar-user">
+        <div className="navbar-user desktop-only">
           <span className="user-info">
             {user?.name} ({user?.role})
           </span>
@@ -2419,6 +2429,9 @@ function Reports({ token, user }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Credit payments report data
+  const [creditPaymentsData, setCreditPaymentsData] = useState(null);
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadBranches();
@@ -2440,6 +2453,7 @@ function Reports({ token, user }) {
   const generateReport = async () => {
     setLoading(true);
     setReportData(null);
+    setCreditPaymentsData(null);
 
     try {
       let url = `${API_BASE}/reports/${reportType}`;
@@ -2454,9 +2468,9 @@ function Reports({ token, user }) {
         params.append('year', year);
       } else if (reportType === 'yearly') {
         params.append('year', year);
-      } else if (reportType === 'custom') {
-        params.append('start_date', startDate);
-        params.append('end_date', endDate);
+      } else if (reportType === 'custom' || reportType === 'credit-payments') {
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
       }
 
       if (params.toString()) {
@@ -2473,12 +2487,30 @@ function Reports({ token, user }) {
         throw new Error(data.error || 'Failed to generate report');
       }
 
-      setReportData(data);
+      if (reportType === 'credit-payments') {
+        setCreditPaymentsData(data);
+      } else {
+        setReportData(data);
+      }
 
     } catch (err) {
       alert(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const printReceipt = (paymentType, paymentId) => {
+    if (paymentType === 'credit_customer') {
+      window.open(`${API_BASE}/receipt/credit-payment/${paymentId}`, '_blank');
+    } else if (paymentType === 'bulk_reseller') {
+      window.open(`${API_BASE}/receipt/bulk-reseller-payment/${paymentId}`, '_blank');
+    }
+  };
+
+  const printSaleReceipt = (saleId, paymentType) => {
+    if (paymentType === 'cash') {
+      window.open(`${API_BASE}/receipt/sale/${saleId}`, '_blank');
     }
   };
 
@@ -2489,12 +2521,13 @@ function Reports({ token, user }) {
       <div className="report-controls">
         <div className="form-group">
           <label>Report Type</label>
-          <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
-            <option value="daily">Daily Report</option>
-            <option value="weekly">Weekly Report</option>
-            <option value="monthly">Monthly Report</option>
-            <option value="yearly">Yearly Report</option>
-            <option value="custom">Custom Date Range</option>
+          <select value={reportType} onChange={(e) => { setReportType(e.target.value); setReportData(null); setCreditPaymentsData(null); }}>
+            <option value="daily">Daily Sales Report</option>
+            <option value="weekly">Weekly Sales Report</option>
+            <option value="monthly">Monthly Sales Report</option>
+            <option value="yearly">Yearly Sales Report</option>
+            <option value="custom">Custom Date Range Sales</option>
+            <option value="credit-payments">Credit Payments Report</option>
           </select>
         </div>
 
@@ -2548,24 +2581,24 @@ function Reports({ token, user }) {
           </div>
         )}
 
-        {reportType === 'custom' && (
+        {(reportType === 'custom' || reportType === 'credit-payments') && (
           <>
             <div className="form-group">
-              <label>Start Date</label>
+              <label>Start Date {reportType === 'credit-payments' && '(Optional)'}</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                required
+                required={reportType === 'custom'}
               />
             </div>
             <div className="form-group">
-              <label>End Date</label>
+              <label>End Date {reportType === 'credit-payments' && '(Optional)'}</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                required
+                required={reportType === 'custom'}
               />
             </div>
           </>
@@ -2575,6 +2608,78 @@ function Reports({ token, user }) {
           {loading ? 'Generating...' : 'Generate Report'}
         </button>
       </div>
+
+      {/* Credit Payments Report Results */}
+      {creditPaymentsData && (
+        <div className="report-results">
+          <div className="report-summary">
+            <div className="summary-card">
+              <h4>Total Payments</h4>
+              <p>{creditPaymentsData.totals?.total_payments || 0}</p>
+            </div>
+            <div className="summary-card">
+              <h4>Total Amount</h4>
+              <p>₦{(creditPaymentsData.totals?.total_amount || 0).toLocaleString()}</p>
+            </div>
+            <div className="summary-card">
+              <h4>Credit Customer</h4>
+              <p>₦{(creditPaymentsData.totals?.credit_customer_amount || 0).toLocaleString()}</p>
+            </div>
+            <div className="summary-card">
+              <h4>Bulk Reseller</h4>
+              <p>₦{(creditPaymentsData.totals?.bulk_reseller_amount || 0).toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Payment ID</th>
+                  <th>Customer/Reseller</th>
+                  <th>Phone</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditPaymentsData.payments?.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="empty-state">
+                      No credit payments found for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  creditPaymentsData.payments?.map((payment, idx) => (
+                    <tr key={idx}>
+                      <td>{new Date(payment.payment_date).toLocaleDateString()}</td>
+                      <td>#{payment.payment_id}</td>
+                      <td className="customer-name">{payment.customer_name}</td>
+                      <td>{payment.customer_phone}</td>
+                      <td>
+                        <span className={`type-badge ${payment.payment_type === 'credit_customer' ? 'credit' : 'cash'}`}>
+                          {payment.payment_type === 'credit_customer' ? 'Credit Customer' : 'Bulk Reseller'}
+                        </span>
+                      </td>
+                      <td className="profit">₦{parseFloat(payment.amount).toLocaleString()}</td>
+                      <td>
+                        <button 
+                          className="btn small primary"
+                          onClick={() => printReceipt(payment.payment_type, payment.payment_id)}
+                        >
+                          🖨 Receipt
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {reportData && (
         <div className="report-results">
@@ -2611,12 +2716,13 @@ function Reports({ token, user }) {
                   <th>Profit</th>
                   {user?.role === 'admin' && <th>Branch</th>}
                   <th>Note</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
               <tbody>
                 {reportData.sales?.length === 0 ? (
                   <tr>
-                    <td colSpan={user?.role === 'admin' ? 10 : 9} className="empty-state">
+                    <td colSpan={user?.role === 'admin' ? 11 : 10} className="empty-state">
                       No sales found for this period.
                     </td>
                   </tr>
@@ -2637,6 +2743,16 @@ function Reports({ token, user }) {
                       <td className="profit">₦{parseFloat(sale.profit).toLocaleString()}</td>
                       {user?.role === 'admin' && <td>{sale.branch_name}</td>}
                       <td className="note-cell">{sale.sales_note || '-'}</td>
+                      <td>
+                        {sale.payment_type === 'cash' && (
+                          <button 
+                            className="btn small primary"
+                            onClick={() => printSaleReceipt(sale.sale_id, sale.payment_type)}
+                          >
+                            🖨
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
