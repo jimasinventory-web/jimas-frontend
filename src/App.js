@@ -2090,15 +2090,26 @@ function BulkResellers({ token, user }) {
   // Payment Status Update State
   const [statusUpdateMessage, setStatusUpdateMessage] = useState('');
 
+  // Branch Filter State
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState('');
+
   useEffect(() => {
     loadResellers();
     loadBranches();
   }, []);
 
+  useEffect(() => {
+    loadResellers();
+  }, [selectedBranchFilter]);
   const loadResellers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/bulk-resellers`, {
+      let url = `${API_BASE}/bulk-resellers`;
+      if (selectedBranchFilter) {
+        url += `?branch_name=${encodeURIComponent(selectedBranchFilter)}`;
+      }
+      
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -2496,12 +2507,62 @@ function BulkResellers({ token, user }) {
                 <div>
                   <h3>{selectedReseller.name}</h3>
                   <p>{selectedReseller.contact_info}</p>
+                  {selectedReseller.branch_name ? (
+                    <p className="branch-tag">Branch: {selectedReseller.branch_name}</p>
+                  ) : (
+                    <p className="branch-tag unassigned">Branch: Not Assigned</p>
+                  )}
                 </div>
                 <div className="reseller-balance">
                   <span className="balance-label">Total Owed</span>
                   <span className="balance-amount">₦{parseFloat(selectedReseller.open_balance || 0).toLocaleString()}</span>
                 </div>
               </div>
+              
+              {/* Admin: Assign Branch */}
+              {user?.role === 'admin' && (
+                <div className="assign-branch-section">
+                  <label>Assign to Branch:</label>
+                  <select
+                    value={selectedReseller.branch_name || ''}
+                    onChange={async (e) => {
+                      const branchName = e.target.value;
+                      if (!branchName) return;
+                      
+                      if (!window.confirm(`Assign ${selectedReseller.name} to ${branchName}?`)) return;
+                      
+                      try {
+                        const res = await fetch(`${API_BASE}/bulk-resellers/${selectedReseller.id}/assign-branch`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ branch_name: branchName })
+                        });
+                        
+                        const data = await res.json();
+                        
+                        if (!res.ok) {
+                          throw new Error(data.error || 'Failed to assign branch');
+                        }
+                        
+                        alert(`✓ ${data.message}`);
+                        loadCreditBook(selectedReseller.id);
+                        loadResellers();
+                      } catch (err) {
+                        alert(`✗ Error: ${err.message}`);
+                      }
+                    }}
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
               {creditBook?.total_profit_from_paid !== undefined && (
                 <div className="profit-info">
                   <span>Profit from Fully Paid Items: </span>
@@ -2789,11 +2850,26 @@ function BulkResellers({ token, user }) {
     <div className="bulk-resellers">
       <div className="page-header">
         <h2>Bulk Resellers</h2>
-        {user?.role === 'admin' && (
-          <button className="btn primary" onClick={() => setView('create')}>
-            + New Reseller
-          </button>
-        )}
+        <div className="header-actions">
+          {user?.role === 'admin' && branches.length > 0 && (
+            <div className="branch-filter">
+              <select
+                value={selectedBranchFilter}
+                onChange={(e) => setSelectedBranchFilter(e.target.value)}
+              >
+                <option value="">All Branches</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.name}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {user?.role === 'admin' && (
+            <button className="btn primary" onClick={() => setView('create')}>
+              + New Reseller
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -2805,6 +2881,7 @@ function BulkResellers({ token, user }) {
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
+                {user?.role === 'admin' && <th>Branch</th>}
                 <th>Total Purchases</th>
                 <th>Open Balance</th>
                 <th>Actions</th>
@@ -2813,7 +2890,7 @@ function BulkResellers({ token, user }) {
             <tbody>
               {resellers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="empty-state">
+                  <td colSpan={user?.role === 'admin' ? 6 : 5} className="empty-state">
                     No bulk resellers yet. {user?.role === 'admin' ? 'Click "New Reseller" to add one.' : 'Contact admin to add resellers.'}
                   </td>
                 </tr>
@@ -2822,6 +2899,15 @@ function BulkResellers({ token, user }) {
                   <tr key={reseller.id}>
                     <td className="reseller-name">{reseller.name}</td>
                     <td>{reseller.contact_info}</td>
+                    {user?.role === 'admin' && (
+                      <td>
+                        {reseller.branch_name ? (
+                          reseller.branch_name
+                        ) : (
+                          <span className="not-assigned-badge">Not assigned</span>
+                        )}
+                      </td>
+                    )}
                     <td>₦{parseFloat(reseller.total_purchases || 0).toLocaleString()}</td>
                     <td>
                       <span className={`balance ${parseFloat(reseller.open_balance) > 0 ? 'owing' : 'clear'}`}>
