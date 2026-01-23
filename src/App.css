@@ -179,10 +179,6 @@ body {
   display: none;
 }
 
-.desktop-only {
-  display: flex;
-}
-
 /* =============================================================================
    LOGIN PAGE
    ============================================================================= */
@@ -1404,16 +1400,46 @@ td.bad {
   }
 
   .navbar-menu.open {
-  display: flex;
-  flex-direction: column;
-}
-
-.navbar-menu.open + .navbar-user {
-  display: none;
-}
+    display: flex;
+    flex-direction: column;
+  }
 
   .mobile-menu-btn {
     display: block;
+  }
+
+  .navbar-user {
+    display: none !important;
+  }
+
+  .mobile-user-section {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    border-top: 1px solid var(--gray-200);
+    margin-top: 8px;
+    gap: 12px;
+  }
+
+  .mobile-user-info {
+    font-size: 13px;
+    color: var(--gray-600);
+    font-weight: 500;
+  }
+
+  .mobile-logout {
+    width: 100%;
+    padding: 12px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .mobile-logout:hover {
+    background: #dc2626;
   }
 
   .mobile-user-section {

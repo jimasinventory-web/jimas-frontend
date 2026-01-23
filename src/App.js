@@ -109,17 +109,18 @@ function Navbar({ user, activeTab, setActiveTab, onLogout }) {
             </button>
           ))}
           
-          {/* Mobile: User info and Logout inside menu */}
+          {/* Mobile Only: User info and Logout */}
           <div className="mobile-user-section">
             <span className="mobile-user-info">
-              {user?.name} ({user?.role})
+              👤 {user?.name} ({user?.role})
             </span>
-            <button className="logout-btn mobile-logout" onClick={onLogout}>
+            <button className="mobile-logout" onClick={onLogout}>
               Logout
             </button>
           </div>
         </div>
 
+        {/* Desktop Only: User info and Logout */}
         <div className="navbar-user">
           <span className="user-info">
             {user?.name} ({user?.role})
