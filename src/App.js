@@ -4222,6 +4222,40 @@ function Settings({ token, user }) {
           <h3>Supplier Management</h3>
           <p>Manage laptop suppliers</p>
         </div>
+
+        <div className="menu-card" onClick={async () => {
+          try {
+            const res = await fetch(`${API_BASE}/admin/ghost-sales`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            
+            if (data.count === 0) {
+              alert('✓ No ghost sales found - everything is clean!');
+            } else {
+              const fix = window.confirm(
+                `Found ${data.count} ghost sale(s):\n\n` +
+                data.ghost_sales.map(g => `• ${g.serial_number} - ${g.product_name} (${g.branch_name})`).join('\n') +
+                `\n\nWould you like to fix them? This will set them back to "available".`
+              );
+              
+              if (fix) {
+                const fixRes = await fetch(`${API_BASE}/admin/fix-ghost-sales`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const fixData = await fixRes.json();
+                alert(`✓ ${fixData.message}`);
+              }
+            }
+          } catch (err) {
+            alert('Error: ' + err.message);
+          }
+        }}>
+          <div className="menu-icon">🔍</div>
+          <h3>Ghost Sales Check</h3>
+          <p>Find and fix orphaned sold records</p>
+        </div>
       </div>
     </div>
   );
