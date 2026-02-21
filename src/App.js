@@ -519,7 +519,7 @@ function Inventory({ token, user }) {
   };
 
   // Add Stock Form View - ADMIN ONLY
-  if (showAddForm && user?.role === 'admin') {
+  if (showAddForm) {
     return (
       <div className="inventory">
         <div className="page-header">
@@ -625,7 +625,7 @@ function Inventory({ token, user }) {
   }
 
   // Transfer Stock Form View - ADMIN ONLY
-  if (showTransferForm && user?.role === 'admin') {
+  if (showTransferForm) {
     return (
       <div className="inventory">
         <div className="page-header">
@@ -700,13 +700,12 @@ function Inventory({ token, user }) {
                   <th>Branch</th>
                   <th>Cost Price</th>
                   <th>Status</th>
-                  {user?.role === 'admin' && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {groupItems.length === 0 ? (
                   <tr>
-                    <td colSpan={user?.role === 'admin' ? 6 : 5} className="empty-state">No items found</td>
+                    <td colSpan="5" className="empty-state">No items found</td>
                   </tr>
                 ) : (
                   groupItems.map(item => (
@@ -721,15 +720,15 @@ function Inventory({ token, user }) {
                         </span>
                       </td>
                       {user?.role === 'admin' && (
-                        <td>
-                          <button 
-                            className="btn small danger"
-                            onClick={() => handleReturnToSupplier(item.serial_number)}
-                          >
-                            Return to Supplier
-                          </button>
-                        </td>
-                      )}
+  <td>
+    <button 
+      className="btn small danger"
+      onClick={() => handleReturnToSupplier(item.serial_number)}
+    >
+      Return to Supplier
+    </button>
+  </td>
+)}
                     </tr>
                   ))
                 )}
@@ -747,15 +746,13 @@ function Inventory({ token, user }) {
       <div className="page-header">
         <h2>Inventory</h2>
        <div className="header-actions">
-          {user?.role === 'admin' && (
-            <button className="btn primary" onClick={() => setShowAddForm(true)}>
-              + Add Stock
-            </button>
-          )}
-          <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
-            ↔ Transfer Stock
-          </button>
-        </div>
+  <button className="btn primary" onClick={() => setShowAddForm(true)}>
+    + Add Stock
+  </button>
+  <button className="btn secondary" onClick={() => setShowTransferForm(true)}>
+    ↔ Transfer Stock
+  </button>
+       </div>
       </div>
 
       {loading ? (
