@@ -696,6 +696,7 @@ function Inventory({ token, user }) {
               <thead>
                 <tr>
                   <th>Serial Number</th>
+                  <th>Date Added</th>
                   <th>Specifications</th>
                   <th>Branch</th>
                   <th>Cost Price</th>
@@ -705,12 +706,13 @@ function Inventory({ token, user }) {
               <tbody>
                 {groupItems.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="empty-state">No items found</td>
+                    <td colSpan="6" className="empty-state">No items found</td>
                   </tr>
                 ) : (
                   groupItems.map(item => (
                     <tr key={item.serial_number}>
                       <td className="serial-number">{item.serial_number}</td>
+                      <td>{new Date(item.created_at).toLocaleDateString()}</td>
                       <td>{item.specifications || '-'}</td>
                       <td>{item.branch_name}</td>
                       <td>₦{parseFloat(item.cost_price).toLocaleString()}</td>
@@ -1681,6 +1683,34 @@ function CreditCustomers({ token, user }) {
     }
   };
 
+  const handleDeleteCustomer = async (contactInfo, customerName) => {
+    if (!window.confirm(`Are you sure you want to delete "${customerName}"? This action cannot be undone and only works if the balance is ₦0.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/credit-customers/${contactInfo}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete customer');
+      }
+
+      alert(`✓ ${data.message}`);
+      setView('list');
+      setSelectedCustomer(null);
+      setCustomerDebts(null);
+      loadCustomers();
+
+    } catch (err) {
+      alert(`✗ Error: ${err.message}`);
+    }
+  };
+
   // Customer Details View
   if (view === 'details' && selectedCustomer) {
     return (
@@ -1710,6 +1740,17 @@ function CreditCustomers({ token, user }) {
                 <div className="customer-balance">
                   <span className="balance-label">Total Owed</span>
                   <span className="balance-amount">₦{parseFloat(selectedCustomer.open_balance || 0).toLocaleString()}</span>
+                  
+                  {/* DELETE BUTTON - Only show if balance is zero and user is admin */}
+                  {user?.role === 'admin' && parseFloat(selectedCustomer.open_balance || 0) === 0 && (
+                    <button 
+                      className="btn small danger"
+                      onClick={() => handleDeleteCustomer(selectedCustomer.contact_info, selectedCustomer.name)}
+                      style={{ marginTop: '12px' }}
+                    >
+                      🗑 Delete Customer
+                    </button>
+                  )}
                 </div>
               </div>
               
