@@ -3,8 +3,10 @@ import './App.css';
 
 // =============================================================================
 // API BASE URL - YOUR RENDER BACKEND
+// Set REACT_APP_API_BASE in a .env file (or in your host's env settings) to
+// point the app at a different backend. The value below is the fallback.
 // =============================================================================
-const API_BASE = "https://jimas-backend-api.onrender.com";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://jimas-backend-api.onrender.com";
 
 // =============================================================================
 // MAIN APP COMPONENT
@@ -19,7 +21,21 @@ function App() {
       try {
         const payload = token.split('.')[1];
         const decoded = JSON.parse(atob(payload));
+
+        // Auto-logout if the token has expired (exp is in seconds).
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+          handleLogout();
+          return;
+        }
+
         setUser(decoded);
+
+        // Schedule an automatic logout for the moment the token expires.
+        if (decoded.exp) {
+          const msUntilExpiry = decoded.exp * 1000 - Date.now();
+          const timer = setTimeout(() => handleLogout(), msUntilExpiry);
+          return () => clearTimeout(timer);
+        }
       } catch (e) {
         console.error('Invalid token');
         handleLogout();
@@ -220,7 +236,8 @@ function Dashboard({ token, user, setActiveTab }) {
     todaySales: 0,
     weeklySales: 0,
     totalStock: 0,
-    creditOwed: 0
+    creditOwed: 0,
+    lowStockCount: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -232,26 +249,30 @@ function Dashboard({ token, user, setActiveTab }) {
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [dailyRes, weeklyRes, stockRes, creditRes] = await Promise.all([
+      const [dailyRes, weeklyRes, stockRes, creditRes, lowRes] = await Promise.all([
         fetch(`${API_BASE}/reports/daily`, { headers }),
         fetch(`${API_BASE}/reports/weekly`, { headers }),
         fetch(`${API_BASE}/stock/groups`, { headers }),
-        fetch(`${API_BASE}/credit-customers`, { headers })
+        fetch(`${API_BASE}/credit-customers`, { headers }),
+        fetch(`${API_BASE}/stock/low?threshold=3`, { headers })
       ]);
 
       const daily = await dailyRes.json();
       const weekly = await weeklyRes.json();
       const stock = await stockRes.json();
       const credit = await creditRes.json();
+      const low = await lowRes.json().catch(() => ({ groups: [] }));
 
       const totalStock = stock.groups?.reduce((sum, g) => sum + parseInt(g.total_available || 0), 0) || 0;
       const creditOwed = credit.customers?.reduce((sum, c) => sum + parseFloat(c.open_balance || 0), 0) || 0;
+      const lowStockCount = low.groups?.length || 0;
 
       setStats({
         todaySales: daily.totals?.total_revenue || 0,
         weeklySales: weekly.totals?.total_revenue || 0,
         totalStock,
-        creditOwed
+        creditOwed,
+        lowStockCount
       });
     } catch (err) {
       console.error('Dashboard error:', err);
@@ -298,6 +319,19 @@ function Dashboard({ token, user, setActiveTab }) {
           <div className="stat-info">
             <h3>Credit Owed</h3>
             <p>₦{stats.creditOwed.toLocaleString()}</p>
+          </div>
+        </div>
+
+        <div
+          className={`stat-card ${stats.lowStockCount > 0 ? 'red' : 'gray'}`}
+          onClick={() => setActiveTab('inventory')}
+          style={{ cursor: 'pointer' }}
+          title="Products with 3 or fewer units left"
+        >
+          <div className="stat-icon">⚠️</div>
+          <div className="stat-info">
+            <h3>Low Stock</h3>
+            <p>{stats.lowStockCount} {stats.lowStockCount === 1 ? 'item' : 'items'}</p>
           </div>
         </div>
       </div>
